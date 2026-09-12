@@ -1,0 +1,165 @@
+_config_version: 42
+
+# kyctrl — top-level Hermes gateway config.
+#
+# This file is security-critical and hand-edited only, on purpose: Hermes's
+# `hermes webhook subscribe` CLI deliberately has no --toolsets flag, so a
+# bot cannot ever widen its own tool grant at runtime — only a human editing
+# this file (reviewed like code) can. See docs/architecture.md.
+#
+# Business tunables (thresholds, feature flags) do NOT live here — see
+# settings.yaml. This file only answers "what can each bot technically do".
+#
+# GOTCHA (confirmed live, Phase 0): Hermes rewrites this file on load
+# whenever it runs its config-version migration step, and that rewrite
+# does NOT preserve comments (standard YAML round-trip behavior) or any
+# commented-out route stubs below. It already did this once, stripping
+# everything in this file down to bare keys. It should not fire again now
+# that _config_version matches Hermes's current version (bump it back to
+# the version Hermes reports if it ever does) — but treat docs/architecture.md
+# and docs/adding-a-new-bot.md, not these comments, as the actual source of
+# truth for rationale; re-add comments here after any future migration
+# rather than relying on them surviving one.
+
+gateway:
+  multiplex_profiles: true
+
+# --------------------------------------------------------------------------
+# Hand-picked tool subsets. NEVER grant a bot the raw `mcp-github` toolset —
+# the github MCP server (see mcp.json) exposes merge_pull_request,
+# pull_request_review_write, create_or_update_file, delete_file,
+# create_branch, create_repository, etc. alongside the read/comment tools.
+# Every bot toolset below is an explicit allowlist that omits all of those.
+# This list is what actually enforces "the LLM never holds a token that can
+# take a privileged action" — not the SOUL.md prompt.
+# --------------------------------------------------------------------------
+custom_toolsets:
+  dependabot-bot-tools:
+    - mcp-github.pull_request_read
+    - mcp-github.issue_read
+    - mcp-github.list_commits
+    - mcp-github.get_commit
+    - mcp-github.add_issue_comment
+
+# Webhook platform: port-binding, so per the multi-profile gateway docs this
+# section is configured ONLY here on the default profile. Secondary profiles
+# never declare their own `platforms.webhook` block — they're reached via
+# the `profile:` field on a route below, and (if ever addressed directly)
+# the /p/<profile>/webhooks/<route> prefix.
+platforms:
+  webhook:
+    enabled: true
+    extra:
+      port: 8644
+      # Global fallback HMAC secret; every route below sets its own anyway.
+      secret: "${WEBHOOK_SECRET}"
+      routes:
+        # ---------------------------------------------------------------
+        # dependabot-pr — the only live route in Phase 0.
+        # ---------------------------------------------------------------
+        dependabot-pr:
+          events: ["pull_request"]
+          secret: "${GITHUB_WEBHOOK_SECRET}"
+          profile: "dependabot-bot"
+          toolsets: ["dependabot-bot-tools"]
+          skills:
+            - "dependabot-merge-policy"
+            - "supply-chain-risk"
+            - "copilot-review-check"
+          # Deterministic gate: verifies sender is dependabot[bot], parses
+          # signed commit metadata (not the PR title — see
+          # skills/dependabot-merge-policy.md for why), checks Socket.dev,
+          # CI status, and Copilot's review. Prints [SILENT] for any PR not
+          # opened by dependabot[bot]. See scripts/dependabot-policy-engine.py.
+          script: "dependabot-policy-engine.py"
+          prompt: |
+            A Dependabot pull request was opened:
+
+            Repo: {payload.repository.full_name}
+            PR #{payload.pull_request.number}: {payload.pull_request.title}
+            URL: {payload.pull_request.html_url}
+
+            The deterministic policy engine already evaluated this PR.
+            Its verdict (do not second-guess or recompute it):
+
+            Decision: {kyctrl_verdict.decision}
+            Reasons:
+            {kyctrl_verdict.reasons_text}
+
+            Write one concise, friendly comment to post on this PR as
+            @kyctrl-bot, explaining the verdict using the specific reasons
+            above (not generic filler). Rules:
+
+            - If Decision is APPROVE, the comment MUST include the exact
+              literal line `/kyctrl-merge approved` on its own line —
+              this exact string is machine-parsed by a GitHub Actions
+              workflow to trigger the merge. Do not paraphrase, rewrap, or
+              add punctuation to that line.
+            - If Decision starts with FLAG, do NOT include that trigger
+              line anywhere. Instead, clearly state what a human maintainer
+              needs to check and why the engine didn't auto-approve.
+            - Then call add_issue_comment to post the comment on
+              {payload.repository.full_name}#{payload.pull_request.number}.
+            - You do not have a merge tool, a review-approval tool, or any
+              file-write tool. Do not attempt to use one — this comment is
+              the only action available to you.
+
+        # ---------------------------------------------------------------
+        # Not yet implemented — see docs/adding-a-new-bot.md and the build
+        # plan. Left commented so the routing table's eventual full shape
+        # is visible, and so adding one is "uncomment + fill in" rather
+        # than inventing structure from scratch.
+        #
+        # WARNING: comments and this whole commented block are NOT YAML —
+        # they get silently dropped the next time Hermes rewrites this file
+        # (see the GOTCHA note at the top). Re-add from docs/adding-a-new-bot.md
+        # if that happens.
+        # ---------------------------------------------------------------
+        # triage-issue:        { profile: triage-bot,       events: ["issues"] }              # Phase 1
+        # reproduce-trigger:   { profile: reproduction-bot, events: ["issue_comment"] }        # Phase 2
+        # coach-pr:            { profile: coach-bot,        events: ["pull_request"] }         # Phase 3
+        # security-label:      { profile: security-bot,     events: ["issues"] }               # Phase 4
+        # merge-queue-signal:  { profile: merge-queue-bot,  events: ["pull_request", "push"] } # Phase 6
+        # flaky-workflow-run:  { profile: flaky-bot,        events: ["workflow_run"] }         # Phase 6
+
+plugins:
+  enabled: []
+agent: {}
+
+# ── Security ──────────────────────────────────────────────────────────
+# Secret redaction is ON by default — strings that look like API keys,
+# tokens, and passwords are masked in tool output, logs, and chat
+# responses before the model or user ever sees them. Set redact_secrets
+# to false to disable (e.g. when developing the redactor itself).
+# tirith pre-exec scanning is enabled by default when the tirith binary
+# is available. Configure via security.tirith_* keys or env vars
+# (TIRITH_ENABLED, TIRITH_BIN, TIRITH_TIMEOUT, TIRITH_FAIL_OPEN).
+#
+# security:
+#   redact_secrets: true
+#   tirith_enabled: true
+#   tirith_path: "tirith"
+#   tirith_timeout: 5
+#   tirith_fail_open: true
+
+# ── Fallback Model ────────────────────────────────────────────────────
+# Automatic provider failover when primary is unavailable.
+# Uncomment and configure to enable. Triggers on rate limits (429),
+# overload (529), service errors (503), or connection failures.
+#
+# Supported providers:
+#   openrouter   (OPENROUTER_API_KEY)  — routes to any model
+#   openai-codex (OAuth — hermes auth) — OpenAI Codex
+#   nous         (OAuth — hermes auth) — Nous Portal
+#   zai          (ZAI_API_KEY)         — Z.AI / GLM
+#   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
+#   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
+#   minimax      (MINIMAX_API_KEY)     — MiniMax
+#   minimax-cn   (MINIMAX_CN_API_KEY)  — MiniMax (China)
+#   bedrock      (AWS IAM / boto3)     — AWS Bedrock (Converse API)
+#
+# For custom OpenAI-compatible endpoints, add base_url and key_env.
+#
+# fallback_model:
+#   provider: openrouter
+#   model: anthropic/claude-sonnet-4

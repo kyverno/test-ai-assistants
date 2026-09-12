@@ -1,0 +1,16 @@
+{
+  "//": "Standard MCP client config (mcpServers map), mounted into the Hermes container at /opt/data/mcp.json. Hermes turns each configured server into a toolset named mcp-<server-name> (e.g. this 'github' entry becomes the 'mcp-github' toolset). NOTHING should ever grant the raw 'mcp-github' toolset wholesale to a bot profile — it includes merge_pull_request and other mutating tools. Bots get a hand-picked custom_toolsets subset instead; see config.yaml's custom_toolsets block and docs/architecture.md.",
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${KYCTRL_READONLY_GITHUB_TOKEN}"
+      }
+    }
+  }
+}

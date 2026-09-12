@@ -1,0 +1,46 @@
+# kyctrl — local/VPS deployment for Hermes (+ CodeGraph from Phase 7 on).
+#
+# IMPORTANT — learned the hard way in Phase 0: /opt/data is Hermes's full
+# runtime data directory, not just "where config lives". Hermes writes a
+# LOT there at boot and on every run — state.db + -wal/-shm siblings and
+# lock files (global and per-profile), a kanban.db, a cron/ tree, a
+# lazy-packages/ Python venv dump, an .npm/ cache, backups/config/ snapshots
+# taken on every migration, gateway.pid/.lock/_state.json, install_id, and
+# (once, on first boot) it SYNCS ITS OWN ~60 BUNDLED SKILLS into skills/ and
+# a whatsapp-bridge/ helper into scripts/ — none of which belongs in a git
+# repo. An earlier version of this file mounted the kyctrl repo root
+# directly as /opt/data, which dumped all of that into the tracked tree.
+#
+# Fix: /opt/data is a separate, gitignored directory (`.hermes-data/`,
+# created by `setup.sh`) that Hermes owns completely. `setup.sh` syncs just
+# the tracked config (config.yaml, settings.yaml, mcp.json, SOUL.md,
+# distribution.yaml, profiles/, skills/, scripts/) into it before every
+# `docker compose up` — one-directional, repo -> .hermes-data/, so Hermes's
+# own writes (sessions, memory, state.db, its bundled skills) land in
+# .hermes-data/ and never touch the repo. Don't reintroduce a repo-root
+# bind mount here; use `./setup.sh`, not `docker compose up` directly.
+#
+# Also unlike upstream, this uses bridge networking with explicit port
+# mapping instead of `network_mode: host`, because Phase 0 runs on macOS
+# Docker Desktop where host networking isn't reliably available. Once this
+# moves to the Linode node (Linux), switching to `network_mode: host`
+# matches upstream's documented setup and also unlocks the dashboard
+# service — see docs/deployment.md.
+#
+# Usage: ./setup.sh (not `docker compose up` directly — see above)
+
+services:
+  gateway:
+    image: nousresearch/hermes-agent:latest
+    container_name: kyctrl-hermes
+    restart: unless-stopped
+    volumes:
+      - ./.hermes-data:/opt/data
+    ports:
+      - "8644:8644" # webhook route listener (config.yaml platforms.webhook.extra.port)
+      - "8642:8642" # gateway API (unused in Phase 0, kept for parity/debugging)
+    environment:
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: ["gateway", "run"]

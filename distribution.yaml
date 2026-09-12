@@ -1,0 +1,14 @@
+# Hermes Profile Distribution manifest — NOT used in Phase 0.
+#
+# This becomes relevant if/when kyctrl's profiles get packaged for reuse by
+# other CNCF projects (e.g. "install the dependabot-bot pattern in your own
+# repo"). Phase 0 runs entirely from this repo mounted directly into the
+# Hermes container (see docker-compose.yml) — nothing here is read yet.
+#
+# Left as a stub rather than deleted so the repo's target shape (per the
+# build plan) is visible from day one. Fill in once there's a second
+# consumer of these profiles.
+
+version: 1
+name: kyctrl
+status: not-yet-implemented

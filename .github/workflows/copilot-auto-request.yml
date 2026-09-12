@@ -1,0 +1,33 @@
+name: request Copilot review
+
+# kyctrl replaced CodeRabbit with GitHub Copilot's PR review as the
+# "something actually looked at this diff" signal every PR-touching bot
+# checks (see skills/copilot-review-check.md). Unlike CodeRabbit, Copilot
+# doesn't review automatically on repos that don't have an org-level
+# auto-request rule configured, so this workflow requests it explicitly on
+# every PR — bots can then assume a review exists (or will shortly) by the
+# time they run, instead of each bot conditionally requesting one itself.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request-copilot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request a review from Copilot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # `gh pr edit --add-reviewer @copilot` is the documented way to
+        # request Copilot as a reviewer via the CLI (shipped March 2026). If
+        # the sandbox repo's plan doesn't support this (Copilot code review
+        # availability varies by plan), this step fails loudly rather than
+        # silently — see docs/deployment.md Phase 0 checklist to confirm
+        # before relying on it.
+        run: gh pr edit "$PR_NUMBER" --repo "$REPO" --add-reviewer @copilot
