@@ -43,8 +43,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          # gh's --json author is GraphQL-backed and reports Dependabot's login as "app/dependabot" —
+          # NOT "dependabot[bot]", which is the REST/webhook-payload form used elsewhere (e.g.
+          # copilot-auto-request.yml's github.event.pull_request.user.login). Confirmed live: the
+          # "dependabot[bot]" filter silently matched zero PRs even with real ones open.
           pr_numbers=$(gh pr list --repo "$REPO" --state open --json number,author \
-            --jq '.[] | select(.author.login == "dependabot[bot]") | .number')
+            --jq '.[] | select(.author.login == "app/dependabot") | .number')
 
           if [[ -z "$pr_numbers" ]]; then
             echo "No open Dependabot PRs."
