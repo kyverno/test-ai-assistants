@@ -1,0 +1,31 @@
+name: dependabot test fixture CI
+
+# The only real check Dependabot's gomod PRs against examples/dependabot-test-fixture
+# will trigger. Exists so copilot-dependabot-autofix.yml has a genuine failing check
+# to react to, not just merge conflicts. See docs/testing-copilot-dependabot-autofix.md.
+
+on:
+  pull_request:
+    paths:
+      - "examples/dependabot-test-fixture/**"
+  push:
+    branches: [main]
+    paths:
+      - "examples/dependabot-test-fixture/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/dependabot-test-fixture
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - run: go build ./...
+      - run: go vet ./...

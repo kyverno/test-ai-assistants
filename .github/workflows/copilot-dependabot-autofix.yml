@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# Fully automatic — no maintainer ever types anything here. As soon as GitHub Copilot's own review of a Dependabot
+# PR finishes (pull_request_review, submitted by copilot-pull-request-reviewer[bot]), this checks that PR's current
+# state — a merge conflict with the base branch, and any check that has already finished and failed — and if
+# either is true, posts a single `@copilot` comment asking the coding agent to fix it in place. Copilot re-reviews
+# automatically on every push (confirmed GitHub behavior), including a push this workflow's own fix-request
+# eventually produces, so this re-fires and re-checks on each round rather than needing a separate poll/retry loop.
+#
+# Why review-completion and not a CI-failure event: a Dependabot PR can also drift into conflict purely because
+# `main` moved forward, with no new push to the PR itself — GitHub does not emit a `pull_request` event for that,
+# so a trigger scoped to the PR's own push events would never see it. Anchoring on Copilot's review instead means
+# every review round — including ones with no new commit on the PR side — is a chance to notice.
+#
+# Known gap, not solved here: if a check is still pending (not yet completed) at the moment Copilot's review
+# lands, this pass won't see it fail — it only inspects checks that have already finished. The next re-review
+# after any subsequent push (Dependabot's own, or this workflow's fix commit) gives it another look; a check that
+# fails without ever being followed by another push would need a separate scheduled sweep, not implemented here.
+#
+# Token scope, deliberately: `pull-requests: write` (comment/label/close a PR) and `checks: read` (read check-run
+# state) only — never `contents: write`, so this workflow's own GITHUB_TOKEN cannot merge a PR, push a commit, or
+# delete a branch under any circumstance; merging a PR requires `contents: write` specifically, which is never
+# granted here. What this token *can* do is post a comment that summons Copilot's coding agent — that agent then
+# acts under its own, separate GitHub App credential, governed entirely by org/repo Copilot settings and branch
+# protection, not by anything in this file. Event fields are passed through `env:` rather than interpolated
+# directly into `run:` script bodies, so a value from the triggering event can't be read as shell syntax.
+
+name: "Copilot Dependabot autofix"
+
+permissions: {}
+
+on:
+  pull_request_review:
+    types:
+      - submitted
+
+jobs:
+  fix-if-needed:
+    name: Ask Copilot to fix whatever Copilot's review found broken
+    if: >
+      github.event.review.user.login == 'copilot-pull-request-reviewer[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check current PR state and ask Copilot to fix it if needed
+        run: |
+          set -euo pipefail
+
+          mergeable_state=$(gh pr view "$PR_NUMBER" --repo "${GITHUB_REPOSITORY}" --json mergeStateStatus --jq '.mergeStateStatus')
+          has_conflict=false
+          if [[ "$mergeable_state" == "DIRTY" ]]; then
+            has_conflict=true
+          fi
+
+          # Only checks that have already completed and failed — a still-pending check isn't a failure yet.
+          failing_checks=$(gh pr checks "$PR_NUMBER" --repo "${GITHUB_REPOSITORY}" --json name,state \
+            --jq '[.[] | select(.state == "FAILURE" or .state == "ERROR") | .name] | join(", ")')
+
+          if [[ "$has_conflict" == "false" && -z "$failing_checks" ]]; then
+            echo "Nothing broken as of this review — merge state is $mergeable_state, no completed checks are failing."
+            exit 0
+          fi
+
+          # Keyed to the commit Copilot just reviewed, not the run — so re-reviews of the SAME commit (e.g. two
+          # reviewers, or GitHub retrying) don't duplicate the ask, but a genuinely new commit (Dependabot's own
+          # update, or this workflow's own prior fix) gets a fresh one.
+          marker="<!-- copilot-dependabot-autofix: $HEAD_SHA -->"
+          existing=$(gh pr view "$PR_NUMBER" --repo "${GITHUB_REPOSITORY}" --json comments \
+            --jq ".comments[] | select(.body | contains(\"$marker\")) | .id")
+          if [[ -n "$existing" ]]; then
+            echo "Already asked Copilot about commit $HEAD_SHA, skipping."
+            exit 0
+          fi
+
+          problems=""
+          if [[ "$has_conflict" == "true" ]]; then
+            problems="- Has a merge conflict with the base branch."
+          fi
+          if [[ -n "$failing_checks" ]]; then
+            problems="$problems
+          - The following check(s) already failed: $failing_checks."
+          fi
+
+          body="$marker
+          @copilot your review of this Dependabot PR just finished. Its current state needs a fix before it can be
+          merged:
+          $problems
+
+          Investigate and fix all of the above so this PR can be merged. For a merge conflict: resolve it while
+          keeping the dependency version bump intact — do not revert the version change itself, only reconcile the
+          surrounding diff. For a failing check: if it is because the new version changed an API this repo calls,
+          update the calling code; if it is a generated-file drift (codegen, CRDs), run the appropriate
+          \`make codegen-*\` target and commit the result — see the Generated/no-edit zones table in
+          ARCHITECTURE.md for which files that covers. Only add what is needed to make the build/tests pass and
+          the conflict resolve; do not touch the dependency version itself."
+
+          gh pr comment "$PR_NUMBER" --repo "${GITHUB_REPOSITORY}" --body "$body"
