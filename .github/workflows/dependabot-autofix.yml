@@ -1,36 +1,40 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 #
-# Runs on a schedule, not on Copilot's pull_request_review event, for one concrete reason confirmed live on this
-# repo: GitHub holds any workflow run triggered by an event tied to a Dependabot-authored PR — pull_request_review
-# included — at action_required (zero jobs, no logs) until a maintainer manually clicks "Approve and run", and
-# that approval is required on EVERY run, not once. `push`/`pull_request` got an exemption from this in 2021 (they
-# now just respect the workflow's `permissions:` key instead of gating), but pull_request_review never did. A
-# fully-automatic design can't be built on an event that needs a human click every time.
-# See https://docs.github.com/en/code-security/reference/supply-chain-security/troubleshoot-dependabot/dependabot-on-actions
+# Fully automatic — no maintainer comment involved. Sweeps open Dependabot PRs on a schedule (see
+# docs/testing-copilot-dependabot-autofix.md for why: pull_request_review-triggered runs on a Dependabot PR get
+# stuck at action_required, needing a maintainer to click "Approve and run" on EVERY run, not once — confirmed
+# live on this repo). For each one, checks its current state — a merge conflict with the base branch, or a check
+# that's already finished and failed — and asks CodeRabbit to fix whichever applies, via its documented comment
+# commands: `@coderabbitai resolve merge conflict` and `@coderabbitai fix-ci commit`.
 #
-# `schedule` isn't associated with Dependabot at all, so it always gets a normal, ungated token — this sweeps
-# every open Dependabot PR on each tick instead of reacting to one review event. That also closes a gap the
-# review-triggered design had: a check that finishes and fails, or a conflict from `main` moving, with no later
-# push to produce a new review, would never have been noticed. A sweep just looks again next interval regardless.
+# Copilot's code-review capability is confirmed working in this org; its coding agent, which would fix things
+# itself via an @copilot mention, is not currently licensed here. CodeRabbit is the fallback fixer instead — NOT
+# YET CONFIRMED installed on this specific repo (no coderabbitai activity seen on any PR here so far). Until it
+# is, this workflow's comment-posting mechanics can be tested end to end, but the "CodeRabbit actually fixes it"
+# half of the loop can't be. If Copilot's coding agent becomes licensed later, this is the file to point back at
+# @copilot instead.
 #
-# Token scope, deliberately: `pull-requests: write` (comment) and `checks: read` (read check-run state) only —
-# never `contents: write`, so this workflow's own GITHUB_TOKEN cannot merge a PR, push a commit, or delete a
-# branch under any circumstance. What this token *can* do is post a comment that summons Copilot's coding agent —
-# that agent then acts under its own, separate GitHub App credential, governed entirely by org/repo Copilot
-# settings and branch protection, not by anything in this file.
+# Why a sweep and not a push/CI-failure event: a Dependabot PR can also drift into conflict purely because `main`
+# moved on, with no new push to the PR itself — GitHub emits no `pull_request` event for that, so a
+# push-triggered design would miss it. A sweep just looks again next interval regardless.
+#
+# Token scope: `pull-requests: write` (comment) and `checks: read` (read check-run state) only — never
+# `contents: write`, so this workflow's own GITHUB_TOKEN cannot merge a PR, push a commit, or delete a branch
+# under any circumstance. What it can do is post a comment; CodeRabbit then acts under its own GitHub App
+# credential, not this token.
 
-name: "Copilot Dependabot autofix"
+name: "Dependabot autofix"
 
 permissions: {}
 
 on:
+  workflow_dispatch: {}
   schedule:
     - cron: "*/15 * * * *"
-  workflow_dispatch: {}
 
 jobs:
   fix-if-needed:
-    name: Ask Copilot to fix any broken Dependabot PR
+    name: Ask CodeRabbit to fix any broken Dependabot PR
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -43,10 +47,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # gh's --json author is GraphQL-backed and reports Dependabot's login as "app/dependabot" —
-          # NOT "dependabot[bot]", which is the REST/webhook-payload form used elsewhere (e.g.
-          # copilot-auto-request.yml's github.event.pull_request.user.login). Confirmed live: the
-          # "dependabot[bot]" filter silently matched zero PRs even with real ones open.
+          # gh's --json author is GraphQL-backed and reports Dependabot's login as "app/dependabot" — NOT
+          # "dependabot[bot]", the REST/webhook form (e.g. copilot-auto-request.yml's
+          # github.event.pull_request.user.login). Confirmed live in dependabot-autofix.yml's predecessor.
           pr_numbers=$(gh pr list --repo "$REPO" --state open --json number,author \
             --jq '.[] | select(.author.login == "app/dependabot") | .number')
 
@@ -61,53 +64,44 @@ jobs:
             pr_json=$(gh pr view "$pr_number" --repo "$REPO" --json mergeStateStatus,headRefOid,comments)
             mergeable_state=$(jq -r '.mergeStateStatus' <<<"$pr_json")
             head_sha=$(jq -r '.headRefOid' <<<"$pr_json")
+            existing_comments=$(jq -r '.comments[].body' <<<"$pr_json")
 
             has_conflict=false
-            if [[ "$mergeable_state" == "DIRTY" ]]; then
-              has_conflict=true
-            fi
+            [[ "$mergeable_state" == "DIRTY" ]] && has_conflict=true
 
             # Only checks that have already completed and failed — a still-pending check isn't a failure yet.
-            failing_checks=$(gh pr checks "$pr_number" --repo "$REPO" --json name,state \
-              --jq '[.[] | select(.state == "FAILURE" or .state == "ERROR") | .name] | join(", ")')
+            # ACTION_REQUIRED included because the DCO probot app reports a missing sign-off with that
+            # conclusion, not FAILURE/ERROR — confirmed live in pr-readiness-check.yml's dco_failing check.
+            failing_checks=$(gh pr checks "$pr_number" --repo "$REPO" --json state \
+              --jq '[.[] | select(.state == "FAILURE" or .state == "ERROR" or .state == "ACTION_REQUIRED")] | length')
 
-            if [[ "$has_conflict" == "false" && -z "$failing_checks" ]]; then
+            if [[ "$has_conflict" == "false" && "$failing_checks" == "0" ]]; then
               echo "Nothing broken — merge state is $mergeable_state, no completed checks are failing."
               echo "::endgroup::"
               continue
             fi
 
-            # Keyed to the PR's current head commit — so a commit already asked about isn't asked about again,
-            # but a genuinely new commit (Dependabot's own update, or Copilot's own fix) gets a fresh ask.
-            marker="<!-- copilot-dependabot-autofix: $head_sha -->"
-            existing=$(jq -r --arg marker "$marker" \
-              '.comments[] | select(.body | contains($marker)) | .id' <<<"$pr_json")
-            if [[ -n "$existing" ]]; then
-              echo "Already asked Copilot about commit $head_sha, skipping."
-              echo "::endgroup::"
-              continue
-            fi
-
-            problems=""
+            # Two independent markers, one per condition, so a PR that's both conflicted and CI-failing gets
+            # both asks, and each is deduped on its own — fixing one doesn't suppress re-asking about the other.
             if [[ "$has_conflict" == "true" ]]; then
-              problems="- Has a merge conflict with the base branch."
+              marker="<!-- dependabot-autofix: conflict $head_sha -->"
+              if grep -qF -- "$marker" <<<"$existing_comments"; then
+                echo "Already asked CodeRabbit to resolve the conflict on commit $head_sha, skipping."
+              else
+                gh pr comment "$pr_number" --repo "$REPO" \
+                  --body "$(printf '%s\n@coderabbitai resolve merge conflict' "$marker")"
+              fi
             fi
-            if [[ -n "$failing_checks" ]]; then
-              problems="$problems
-            - The following check(s) already failed: $failing_checks."
+
+            if [[ "$failing_checks" != "0" ]]; then
+              marker="<!-- dependabot-autofix: fix-ci $head_sha -->"
+              if grep -qF -- "$marker" <<<"$existing_comments"; then
+                echo "Already asked CodeRabbit to fix CI on commit $head_sha, skipping."
+              else
+                gh pr comment "$pr_number" --repo "$REPO" \
+                  --body "$(printf '%s\n@coderabbitai fix-ci commit' "$marker")"
+              fi
             fi
 
-            body="$marker
-            @copilot this Dependabot PR's current state needs a fix before it can be merged:
-            $problems
-
-            Investigate and fix all of the above so this PR can be merged. For a merge conflict: resolve it while
-            keeping the dependency version bump intact — do not revert the version change itself, only reconcile
-            the surrounding diff. For a failing check: if it is because the new version changed an API this repo
-            calls, update the calling code; if it is a generated-file drift (codegen, CRDs), run the appropriate
-            \`make codegen-*\` target and commit the result. Only add what is needed to make the build/tests pass
-            and the conflict resolve; do not touch the dependency version itself."
-
-            gh pr comment "$pr_number" --repo "$REPO" --body "$body"
             echo "::endgroup::"
           done
