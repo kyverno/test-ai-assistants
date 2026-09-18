@@ -1,112 +1,136 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 #
-# Fully automatic — no maintainer comment involved. Sweeps open Dependabot PRs on a schedule (see
-# docs/testing-copilot-dependabot-autofix.md for why: pull_request_review-triggered runs on a Dependabot PR get
-# stuck at action_required, needing a maintainer to click "Approve and run" on EVERY run, not once — confirmed
-# live on this repo). For each one, checks its current state — a merge conflict with the base branch, or a check
-# that's already finished and failed — and fixes whichever applies.
+# Event-driven, not a schedule sweep — modeled directly on Azure/bicep's copilot-auto-fix.yml
+# (https://github.com/Azure/bicep/blob/main/.github/workflows/copilot-auto-fix.yml), which proves this pattern
+# works in production. The key fact this design relies on: GitHub's "workflow runs triggered by a Dependabot PR
+# get gated behind manual approval" restriction covers pull_request_review, pull_request_review_comment and
+# issue_comment — but NOT plain pull_request or workflow_run. Those two got an explicit exemption in 2021 (they
+# just respect the workflow's own `permissions:` key) and were never subject to the gate to begin with,
+# respectively. Confirmed live on this repo: pull_request_review got stuck at action_required with zero jobs (see
+# docs/testing-copilot-dependabot-autofix.md); switching the trigger types below avoids that entirely, no polling
+# or manual approval needed.
 #
-# A conflict gets `@dependabot rebase` — a real, native, documented Dependabot comment command (no installation
-# or licensing dependency at all, unlike everything below): it re-applies the same version bump on latest main,
-# which is exactly what a conflict caused by main moving forward needs.
+# Two independent jobs:
+#   fix-merge-conflicts  — pull_request (opened/synchronize/reopened) on a Dependabot PR; checks mergeStateStatus.
+#   fix-failing-checks   — workflow_run of "dependabot test fixture CI" completing with conclusion: failure;
+#                          looks up the PR by head branch since workflow_run doesn't carry a PR number.
 #
-# A failing check has no equivalent native fix — `@dependabot rebase` only re-applies the SAME diff, it can't
-# write code to fix a real incompatibility the new version introduced. That needs an actual coding agent. Copilot's
-# code-review capability is confirmed working in this org, but its coding agent (which would fix things itself via
-# an @copilot mention) is not currently licensed here. CodeRabbit's `@coderabbitai fix-ci commit` comment command
-# is used as the fallback instead — NOT YET CONFIRMED installed on this specific repo (no coderabbitai activity
-# seen on any PR here so far). Until it is, this half of the loop can only be tested as far as "the comment posts
-# correctly," not "something acts on it." If Copilot's coding agent becomes licensed later, point this back at
-# @copilot instead.
+# Note: Dependabot has its own built-in, unrelated auto-rebase-on-conflict behavior (default, undocumented-in-UI
+# but confirmed live: a conflict we created was rebased away within ~90s with no comment from us at all). So
+# fix-merge-conflicts will rarely get a chance to fire against a plain version-bump conflict in this repo — it
+# still matters for a conflict Dependabot's own simple rebase can't resolve (overlapping code changes elsewhere),
+# which is the realistic case in a repo with actual application code, unlike this fixture.
 #
-# Why a sweep and not a push/CI-failure event: a Dependabot PR can also drift into conflict purely because `main`
-# moved on, with no new push to the PR itself — GitHub emits no `pull_request` event for that, so a
-# push-triggered design would miss it. A sweep just looks again next interval regardless.
+# Asks @copilot, matching Azure/bicep exactly — NOT a claim Copilot's coding agent is licensed here (it isn't,
+# confirmed earlier); this tests that the comment fires correctly through a non-gated event, not that Copilot
+# acts on it.
 #
-# Token scope: `pull-requests: write` (comment) and `checks: read` (read check-run state) only — never
-# `contents: write`, so this workflow's own GITHUB_TOKEN cannot merge a PR, push a commit, or delete a branch
-# under any circumstance. What it can do is post a comment; CodeRabbit then acts under its own GitHub App
-# credential, not this token.
+# Token scope: `pull-requests: write` only — never `contents: write`, so this workflow's own GITHUB_TOKEN cannot
+# merge a PR, push a commit, or delete a branch under any circumstance.
 
 name: "Dependabot autofix"
 
-permissions: {}
-
 on:
-  workflow_dispatch: {}
-  schedule:
-    - cron: "*/15 * * * *"
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  workflow_run:
+    workflows: ["dependabot test fixture CI"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
 
 jobs:
-  fix-if-needed:
-    name: Fix any broken Dependabot PR
+  fix-merge-conflicts:
+    name: Ask Copilot to fix merge conflicts
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      checks: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      REPO: ${{ github.repository }}
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
-      - name: Sweep open Dependabot PRs
+      # GitHub takes a few seconds to compute mergeability after a push — poll until it's no longer UNKNOWN,
+      # same gotcha Azure/bicep's version handles the same way.
+      - name: Wait for mergeability to be computed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for i in $(seq 1 10); do
+            state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json mergeStateStatus --jq '.mergeStateStatus')
+            echo "Attempt $i: mergeStateStatus=$state"
+            [[ "$state" != "UNKNOWN" ]] && break
+            sleep 10
+          done
+
+      - name: Ask Copilot to resolve the conflict, if there is one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
-          # gh's --json author is GraphQL-backed and reports Dependabot's login as "app/dependabot" — NOT
-          # "dependabot[bot]", the REST/webhook form (e.g. copilot-auto-request.yml's
-          # github.event.pull_request.user.login). Confirmed live in dependabot-autofix.yml's predecessor.
-          pr_numbers=$(gh pr list --repo "$REPO" --state open --json number,author \
-            --jq '.[] | select(.author.login == "app/dependabot") | .number')
-
-          if [[ -z "$pr_numbers" ]]; then
-            echo "No open Dependabot PRs."
+          state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json mergeStateStatus --jq '.mergeStateStatus')
+          if [[ "$state" != "DIRTY" ]]; then
+            echo "Not conflicted (mergeStateStatus=$state)."
             exit 0
           fi
 
-          for pr_number in $pr_numbers; do
-            echo "::group::PR #$pr_number"
+          marker="<!-- dependabot-autofix: conflict $HEAD_SHA -->"
+          existing=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments \
+            --jq ".comments[] | select(.body | contains(\"$marker\")) | .id")
+          if [[ -n "$existing" ]]; then
+            echo "Already asked about commit $HEAD_SHA, skipping."
+            exit 0
+          fi
 
-            pr_json=$(gh pr view "$pr_number" --repo "$REPO" --json mergeStateStatus,headRefOid,comments)
-            mergeable_state=$(jq -r '.mergeStateStatus' <<<"$pr_json")
-            head_sha=$(jq -r '.headRefOid' <<<"$pr_json")
-            existing_comments=$(jq -r '.comments[].body' <<<"$pr_json")
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(printf '%s\n@copilot this Dependabot PR has a merge conflict with main. Resolve it, keeping the dependency version bump intact — do not revert the version change itself, only reconcile the surrounding diff.' "$marker")"
 
-            has_conflict=false
-            [[ "$mergeable_state" == "DIRTY" ]] && has_conflict=true
+  fix-failing-checks:
+    name: Ask Copilot to fix a failing check
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+    steps:
+      - name: Get PR number for the failed run
+        id: get-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          pr_number=$(gh pr list --repo "$REPO" --state open --head "$HEAD_BRANCH" \
+            --json number,author --jq '.[] | select(.author.login == "app/dependabot") | .number' | head -1)
+          if [[ -z "$pr_number" ]]; then
+            echo "No open Dependabot PR found for branch $HEAD_BRANCH."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
 
-            # Only checks that have already completed and failed — a still-pending check isn't a failure yet.
-            # ACTION_REQUIRED included because the DCO probot app reports a missing sign-off with that
-            # conclusion, not FAILURE/ERROR — confirmed live in pr-readiness-check.yml's dco_failing check.
-            failing_checks=$(gh pr checks "$pr_number" --repo "$REPO" --json state \
-              --jq '[.[] | select(.state == "FAILURE" or .state == "ERROR" or .state == "ACTION_REQUIRED")] | length')
+      - name: Ask Copilot to fix it
+        if: steps.get-pr.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.get-pr.outputs.pr_number }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
 
-            if [[ "$has_conflict" == "false" && "$failing_checks" == "0" ]]; then
-              echo "Nothing broken — merge state is $mergeable_state, no completed checks are failing."
-              echo "::endgroup::"
-              continue
-            fi
+          marker="<!-- dependabot-autofix: fix-ci $RUN_ID -->"
+          existing=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments \
+            --jq ".comments[] | select(.body | contains(\"$marker\")) | .id")
+          if [[ -n "$existing" ]]; then
+            echo "Already asked about run $RUN_ID, skipping."
+            exit 0
+          fi
 
-            # Two independent markers, one per condition, so a PR that's both conflicted and CI-failing gets
-            # both asks, and each is deduped on its own — fixing one doesn't suppress re-asking about the other.
-            if [[ "$has_conflict" == "true" ]]; then
-              marker="<!-- dependabot-autofix: conflict $head_sha -->"
-              if grep -qF -- "$marker" <<<"$existing_comments"; then
-                echo "Already asked Dependabot to rebase commit $head_sha, skipping."
-              else
-                gh pr comment "$pr_number" --repo "$REPO" \
-                  --body "$(printf '%s\n@dependabot rebase' "$marker")"
-              fi
-            fi
-
-            if [[ "$failing_checks" != "0" ]]; then
-              marker="<!-- dependabot-autofix: fix-ci $head_sha -->"
-              if grep -qF -- "$marker" <<<"$existing_comments"; then
-                echo "Already asked CodeRabbit to fix CI on commit $head_sha, skipping."
-              else
-                gh pr comment "$pr_number" --repo "$REPO" \
-                  --body "$(printf '%s\n@coderabbitai fix-ci commit' "$marker")"
-              fi
-            fi
-
-            echo "::endgroup::"
-          done
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(printf '%s\n@copilot the "dependabot test fixture CI" check failed on this Dependabot PR (run: %s). Investigate and fix it so the check passes — if it is because the new version changed an API this repo calls, update the calling code. Only add what is needed to make the build/tests pass; do not touch the dependency version itself.' "$marker" "$RUN_URL")"
