@@ -4,14 +4,19 @@
 # docs/testing-copilot-dependabot-autofix.md for why: pull_request_review-triggered runs on a Dependabot PR get
 # stuck at action_required, needing a maintainer to click "Approve and run" on EVERY run, not once — confirmed
 # live on this repo). For each one, checks its current state — a merge conflict with the base branch, or a check
-# that's already finished and failed — and asks CodeRabbit to fix whichever applies, via its documented comment
-# commands: `@coderabbitai resolve merge conflict` and `@coderabbitai fix-ci commit`.
+# that's already finished and failed — and fixes whichever applies.
 #
-# Copilot's code-review capability is confirmed working in this org; its coding agent, which would fix things
-# itself via an @copilot mention, is not currently licensed here. CodeRabbit is the fallback fixer instead — NOT
-# YET CONFIRMED installed on this specific repo (no coderabbitai activity seen on any PR here so far). Until it
-# is, this workflow's comment-posting mechanics can be tested end to end, but the "CodeRabbit actually fixes it"
-# half of the loop can't be. If Copilot's coding agent becomes licensed later, this is the file to point back at
+# A conflict gets `@dependabot rebase` — a real, native, documented Dependabot comment command (no installation
+# or licensing dependency at all, unlike everything below): it re-applies the same version bump on latest main,
+# which is exactly what a conflict caused by main moving forward needs.
+#
+# A failing check has no equivalent native fix — `@dependabot rebase` only re-applies the SAME diff, it can't
+# write code to fix a real incompatibility the new version introduced. That needs an actual coding agent. Copilot's
+# code-review capability is confirmed working in this org, but its coding agent (which would fix things itself via
+# an @copilot mention) is not currently licensed here. CodeRabbit's `@coderabbitai fix-ci commit` comment command
+# is used as the fallback instead — NOT YET CONFIRMED installed on this specific repo (no coderabbitai activity
+# seen on any PR here so far). Until it is, this half of the loop can only be tested as far as "the comment posts
+# correctly," not "something acts on it." If Copilot's coding agent becomes licensed later, point this back at
 # @copilot instead.
 #
 # Why a sweep and not a push/CI-failure event: a Dependabot PR can also drift into conflict purely because `main`
@@ -34,7 +39,7 @@ on:
 
 jobs:
   fix-if-needed:
-    name: Ask CodeRabbit to fix any broken Dependabot PR
+    name: Fix any broken Dependabot PR
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -86,10 +91,10 @@ jobs:
             if [[ "$has_conflict" == "true" ]]; then
               marker="<!-- dependabot-autofix: conflict $head_sha -->"
               if grep -qF -- "$marker" <<<"$existing_comments"; then
-                echo "Already asked CodeRabbit to resolve the conflict on commit $head_sha, skipping."
+                echo "Already asked Dependabot to rebase commit $head_sha, skipping."
               else
                 gh pr comment "$pr_number" --repo "$REPO" \
-                  --body "$(printf '%s\n@coderabbitai resolve merge conflict' "$marker")"
+                  --body "$(printf '%s\n@dependabot rebase' "$marker")"
               fi
             fi
 
