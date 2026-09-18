@@ -33,9 +33,12 @@ jobs:
 
           READINESS_CHECKS='
             def dco_failing:
+              # The DCO probot app reports a missing sign-off as conclusion ACTION_REQUIRED, not
+              # FAILURE/ERROR — confirmed live against a real unsigned commit, which this check
+              # silently missed before ACTION_REQUIRED was added here.
               [.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[]?
                 | select((.name // .context) == "DCO") | (.conclusion // .state)]
-              | any(. == "FAILURE" or . == "ERROR");
+              | any(. == "FAILURE" or . == "ERROR" or . == "ACTION_REQUIRED");
 
             def has_merge_conflicts:
               [.labels.nodes[].name] | any(. == "merge-conflicts");
