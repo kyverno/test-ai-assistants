@@ -67,6 +67,20 @@ review wouldn't have produced a fix-request comment. That's the intended
 scope, not a bug, but easy to expect otherwise from the PR's "Changes
 recommended" banner.
 
+## Gotcha found live: `gh pr list --json author` doesn't say `dependabot[bot]`
+
+After the `schedule` fix above, the sweep ran successfully (no more
+`action_required`) but its own log said *"No open Dependabot PRs"* with 3
+real ones (#1, #2, #3) open. Cause: `gh`'s `--json author` field is
+GraphQL-backed and reports Dependabot's login as `app/dependabot`, not
+`dependabot[bot]` — the REST/webhook form used elsewhere in this repo
+(`copilot-auto-request.yml`'s `github.event.pull_request.user.login`).
+Same bot, two different login spellings depending on which GitHub API
+answered. Fixed by matching `"app/dependabot"` in the `gh pr list --jq`
+filter. Confirmed live afterward: a re-run correctly found all 3 PRs and
+logged *"Nothing broken"* for each — baseline/happy-path test (§1 below)
+passed.
+
 ## External steps — not something I can do from here
 
 **1. Confirm Copilot code review is actually available for this repo.**
