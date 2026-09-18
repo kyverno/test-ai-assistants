@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# Daily sweep of open PRs in the nearest upcoming release milestone, checking whether each one is actually clean:
+# DCO passing, no merge conflicts, no unresolved review threads the author hasn't responded to. A PR that fails
+# any check gets commented on and labeled `needs-author-action`; a PR with none of that label removed. "Open PRs
+# minus that label" is then a reliable answer to "what's actually ready for review."
+#
+# Checks are defined once, as jq `def`s, in READINESS_CHECKS below — add a new one there and add its id to the
+# final array; nothing else in this file needs to change.
+
+name: "PR readiness check"
+
+permissions: {}
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 8 * * *"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: read
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check readiness of PRs in the active milestone
+        run: |
+          set -euo pipefail
+
+          READINESS_CHECKS='
+            def dco_failing:
+              [.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[]?
+                | select((.name // .context) == "DCO") | (.conclusion // .state)]
+              | any(. == "FAILURE" or . == "ERROR");
+
+            def has_merge_conflicts:
+              [.labels.nodes[].name] | any(. == "merge-conflicts");
+
+            # True only if the author has not pushed or commented since the newest unresolved thread — if they
+            # have, they have already reacted and are just waiting on a re-review, not ignoring it.
+            def has_unaddressed_review_threads($author):
+              [.reviewThreads.nodes[] | select(.isResolved | not) | .comments.nodes[0].createdAt] as $unresolved
+              | if ($unresolved | length) == 0 then false else
+                  ($unresolved | max) as $latest_thread
+                  | ([.commits.nodes[0].commit.committedDate]
+                     + [.comments.nodes[] | select(.author.login == $author) | .createdAt]) as $author_activity
+                  | (if ($author_activity | length) == 0 then "1970-01-01T00:00:00Z" else ($author_activity | max) end)
+                    < $latest_thread
+                end;
+
+            .author.login as $author
+            | [
+                (if dco_failing then {id: "dco", message: "fix the DCO"} else empty end),
+                (if has_merge_conflicts then {id: "conflicts", message: "fix the merge conflicts"} else empty end),
+                (if has_unaddressed_review_threads($author) then
+                  {id: "threads", message: "resolve all review comments — mark each thread resolved, or leave a response if you are not sure what to do"}
+                else empty end)
+              ]'
+
+          # Nearest-due open "Kyverno Release ..." milestone — release milestones overlap (a patch and the next
+          # minor can both be open at once), so nearest due date is what makes this the current one, never hardcoded.
+          milestone=$(gh api "repos/${GITHUB_REPOSITORY}/milestones" --jq '
+            [.[] | select(.state == "open" and (.title | test("^Kyverno Release ")))]
+            | sort_by(.due_on // "9999-12-31")
+            | .[0].title // empty')
+          if [[ -z "$milestone" ]]; then
+            echo "No open release milestone found, nothing to check."
+            exit 0
+          fi
+          echo "Active milestone: $milestone"
+
+          query='
+            query($search: String!) {
+              search(query: $search, type: ISSUE, first: 100) {
+                nodes {
+                  ... on PullRequest {
+                    number
+                    isDraft
+                    author { login }
+                    labels(first: 20) { nodes { name } }
+                    commits(last: 1) {
+                      nodes { commit {
+                        committedDate
+                        statusCheckRollup { contexts(first: 50) { nodes {
+                          ... on CheckRun { name conclusion }
+                          ... on StatusContext { context state }
+                        } } }
+                      } }
+                    }
+                    comments(last: 30) { nodes { author { login } body createdAt } }
+                    reviewThreads(first: 50) {
+                      nodes { isResolved comments(last: 1) { nodes { createdAt } } }
+                    }
+                  }
+                }
+              }
+            }'
+          search="repo:${GITHUB_REPOSITORY} is:pr is:open draft:false -author:app/dependabot milestone:\"$milestone\""
+
+          gh api graphql -f query="$query" -f search="$search" --jq '.data.search.nodes[] | select(.isDraft | not)' \
+            > prs.jsonl
+
+          while IFS= read -r pr; do
+            number=$(jq -r '.number' <<< "$pr")
+            author=$(jq -r '.author.login' <<< "$pr")
+            findings=$(jq -c "$READINESS_CHECKS" <<< "$pr")
+            has_label=$(jq -r '[.labels.nodes[].name] | any(. == "needs-author-action")' <<< "$pr")
+
+            if [[ "$findings" == "[]" ]]; then
+              [[ "$has_label" == "true" ]] && gh pr edit "$number" --repo "${GITHUB_REPOSITORY}" --remove-label "needs-author-action"
+              continue
+            fi
+
+            ids=$(jq -r '[.[].id] | sort | join(",")' <<< "$findings")
+            marker="<!-- pr-readiness-check: $ids -->"
+            already_reported=$(jq --arg m "$marker" '[.comments.nodes[] | select(.body | contains($m))] | length > 0' <<< "$pr")
+
+            [[ "$has_label" == "false" ]] && gh pr edit "$number" --repo "${GITHUB_REPOSITORY}" --add-label "needs-author-action"
+            [[ "$already_reported" == "true" ]] && continue
+
+            items=$(jq -r '.[] | "- " + .message' <<< "$findings")
+            body=$(printf '%s\n\n@%s this PR needs a bit more before it can be reviewed:\n%s' "$marker" "$author" "$items")
+
+            gh pr comment "$number" --repo "${GITHUB_REPOSITORY}" --body "$body"
+          done < prs.jsonl
