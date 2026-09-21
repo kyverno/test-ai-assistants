@@ -4,6 +4,9 @@ updates:
     directory: "/examples/dependabot-test-fixture"
     schedule:
       interval: "daily"
+    # go-cmp added as a second outdated dependency — this comment exists to force a config
+    # re-save, since pushing a change to this file is the documented way to prompt an
+    # immediate re-scan (no official API for "check for updates now" exists).
 
   - package-ecosystem: "github-actions"
     directory: "/"
