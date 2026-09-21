@@ -157,7 +157,7 @@ jobs:
         if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true'
         working-directory: examples/dependabot-test-fixture
         run: |
-          copilot -p "The Go build in this directory is failing after a dependency version bump (failed run: $RUN_URL). Run 'go build ./...' and 'go vet ./...' to see the actual error, then edit the .go source files as needed to fix it — do not modify go.mod or go.sum, the dependency version bump itself is correct and must stay exactly as it is. Keep iterating until both commands succeed." \
+          copilot -p "A CI check is failing in this directory after a dependency version bump (failed run: $RUN_URL). Run 'go build ./...', 'go vet ./...', AND 'go test ./...' — all three, do not assume which one is failing — to find the actual error, then edit the .go source files as needed to fix it — do not modify go.mod or go.sum, the dependency version bump itself is correct and must stay exactly as it is. Keep iterating until all three commands succeed." \
             -s --allow-tool='write' --allow-tool='shell(go build:*)' --allow-tool='shell(go vet:*)' --allow-tool='shell(go test:*)' \
             --deny-tool='shell(git:*)' --max-ai-credits 30
 
@@ -166,7 +166,7 @@ jobs:
         if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true'
         working-directory: examples/dependabot-test-fixture
         run: |
-          if go build ./... && go vet ./...; then
+          if go build ./... && go vet ./... && go test ./...; then
             echo "verified=true" >> "$GITHUB_OUTPUT"
           else
             echo "verified=false" >> "$GITHUB_OUTPUT"
