@@ -4,7 +4,7 @@ updates:
     directory: "/examples/dependabot-test-fixture"
     schedule:
       interval: "daily"
-    # pkg/errors added as a third outdated dependency — this comment exists to force a config
+    # subcommands added as a fourth outdated dependency — this comment exists to force a config
     # re-save, since pushing a change to this file is the documented way to prompt an
     # immediate re-scan (no official API for "check for updates now" exists).
 
