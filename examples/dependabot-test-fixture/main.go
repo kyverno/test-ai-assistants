@@ -14,6 +14,6 @@ func Greeting(name string) string {
 }
 
 func main() {
-	fmt.Println(Greeting("world"))
+	fmt.Println(Greeting("world")
 	fmt.Println(uuid.New().String())
 }
