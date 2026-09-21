@@ -251,7 +251,12 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          git add -A
+          # Exclude the *.log scratch files this job itself wrote (failure.log, pr-diff.log,
+          # copilot-review.log, copilot-output.log, and their -excerpt variants) — git add -A would
+          # otherwise stage them into the patch, and apply-fix's copy of copilot-output.log (downloaded
+          # separately as part of the same artifact) then collides with `git apply` trying to create it
+          # again. Confirmed live: exit code 1, "copilot-output.log: already exists in working directory".
+          git add -A -- . ':!*.log'
           if git diff --cached --quiet "$HEAD_SHA"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -312,7 +317,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git apply fix.patch
-          git add -A
+          # Same exclusion as prepare-fix's patch-generation step: fix.patch and copilot-output.log are
+          # this workflow's own downloaded artifact files sitting untracked in the working directory —
+          # without excluding them, git add -A would commit them into the PR as real files.
+          git add -A -- . ':!fix.patch' ':!*.log'
           git commit --signoff -m "fix: address failing $CHECK_NAME check
 
           Copilot-CLI-autofix: $HEAD_SHA"
