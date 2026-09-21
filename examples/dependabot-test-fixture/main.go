@@ -7,13 +7,19 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 func Greeting(name string) string {
 	return "hello, " + name
 }
 
+func WrapError(msg string) error {
+	return errors.New(msg)
+}
+
 func main() {
 	fmt.Println(Greeting("world"))
 	fmt.Println(uuid.New().String())
+	fmt.Println(WrapError("example"))
 }
