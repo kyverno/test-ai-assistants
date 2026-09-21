@@ -188,7 +188,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "$(printf 'Auto-fix: resolve build failure after dependency bump\n\nFixed by Copilot CLI in response to failed run %s.\nVerified locally with go build && go vet before pushing.' "$RUN_URL")"
+          # -s (signoff) adds a Signed-off-by trailer using the identity just configured above — otherwise
+          # this commit fails the repo's own DCO check, which would be a real bug: the autofix commit itself
+          # blocking the PR it's trying to unblock.
+          git commit -s -m "$(printf 'Auto-fix: resolve build failure after dependency bump\n\nFixed by Copilot CLI in response to failed run %s.\nVerified locally with go build && go vet before pushing.' "$RUN_URL")"
           git push origin "HEAD:$HEAD_BRANCH"
 
           # GITHUB_TOKEN-authored pushes don't trigger new workflow runs, so kick CI explicitly.
