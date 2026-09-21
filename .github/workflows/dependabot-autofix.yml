@@ -1,207 +1,298 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 #
-# Event-driven, modeled on Azure/bicep's copilot-auto-fix.yml
-# (https://github.com/Azure/bicep/blob/main/.github/workflows/copilot-auto-fix.yml). The key fact this relies on:
-# GitHub gates workflow runs tied to a Dependabot PR behind manual per-run approval for pull_request_review,
-# pull_request_review_comment and issue_comment — but NOT plain pull_request or workflow_run (pull_request got an
-# explicit 2021 exemption; workflow_run was never in the gated list). Confirmed live on this repo: a
-# pull_request_review-triggered version of this got stuck at action_required with zero jobs (see
-# docs/testing-copilot-dependabot-autofix.md) before being rebuilt on these two trigger types instead.
+# Fixes a failing check on a Dependabot PR by running GitHub Copilot CLI (`@github/copilot`) as a step in this
+# job: it reads the failure log (plus the PR diff, the bump's semver level, and Copilot's own review comments as
+# context), edits files, and this job commits and pushes the fix with its own token. Fully self-contained — no
+# other workflow or bot is involved.
 #
-# fix-merge-conflicts (pull_request: opened/synchronize/reopened) just asks @copilot to resolve a conflict via
-# comment — unchanged, low priority: Dependabot has its own built-in auto-rebase-on-conflict behavior (confirmed
-# live: resolved a real conflict within ~90s with no comment from us at all), so this rarely gets a chance to
-# matter for a plain version-bump conflict.
+# Not the Copilot "coding agent" (blocked in this org) — Copilot CLI authenticates via the `copilot-requests:
+# write` permission and the workflow's own GITHUB_TOKEN, a separate entitlement. Needs the org's "Allow use of
+# Copilot CLI billed to the organization" policy on. Exact CLI flags (`--allow-tool`, `--no-ask-user`) are
+# best-effort from GitHub's docs.
 #
-# fix-failing-checks (workflow_run of "dependabot test fixture CI" completing with conclusion: failure) is the
-# real implementation: runs the actual `copilot` CLI (https://github.com/github/copilot-cli) as a step in THIS
-# job — not a comment asking some external bot to maybe respond. Confirmed live that Copilot CLI authenticates
-# fine in this org even though the hosted "coding agent" (@copilot mention) does not — they're governed by
-# separate, independent policies per GitHub's own docs. Copilot CLI only gets `write` (file edits) and
-# `shell(go build/vet/test:*)` — no git tools at all (`--deny-tool='shell(git:*)'`); this job does the actual
-# `git commit`/`git push` itself afterward, and only after re-verifying the build/vet pass independently — never
-# trusting Copilot's own self-report. Capped at `--max-ai-credits` per attempt and at 2 attempts total per PR
-# (this is NOT free — draws real AI Credits from the org's Copilot plan; see docs/testing-copilot-dependabot-autofix.md).
+# Triggers per check workflow (this repo has no single "CI" workflow). Autofix always attempts a failing check
+# regardless of bump size; major-semver bumps additionally get a needs-human-review label (breaking API changes
+# need judgment). Attempts are capped per-check and globally per-PR to bound AI-credit spend; hitting either cap
+# also labels the PR, so a human never has to guess the state from the comment thread alone.
 #
-# GITHUB_TOKEN-authored pushes don't trigger new workflow runs (anti-recursion protection), so after pushing a
-# fix this explicitly re-runs "dependabot test fixture CI" via workflow_dispatch so the checks tab reflects the
-# fix, rather than leaving a stale red X on the pre-fix commit forever.
-#
-# Token scope: `contents: write` (push the fix), `pull-requests: write` (comment/read), `actions: write`
-# (re-trigger CI), `copilot-requests: write` (bill the CLI's usage to the org, per GitHub's docs) — still never
-# anything that can merge a PR.
+# TESTING NOTE (test-ai-assistants only, remove before the real kyverno/kyverno PR): the `workflows:` list below
+# is swapped to this repo's one real CI check ("dependabot test fixture CI") instead of kyverno's actual workflow
+# names, and the "Setup Go" step uses a plain actions/setup-go instead of kyverno's local
+# ./.github/actions/go/setup composite action, which doesn't exist here. Everything else — every feature this
+# file actually implements — is unchanged from the version meant for kyverno/kyverno.
 
-name: "Dependabot autofix"
+name: "Dependabot autofix (Copilot CLI)"
+
+permissions: {}
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
   workflow_run:
-    workflows: ["dependabot test fixture CI"]
-    types: [completed]
+    types:
+      - completed
+    workflows:
+      - "dependabot test fixture CI"
 
-permissions:
-  pull-requests: write
+concurrency:
+  group: copilot-cli-dependabot-autofix-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+env:
+  PER_CHECK_ATTEMPT_CAP: 2
+  GLOBAL_ATTEMPT_CAP: 5
 
 jobs:
-  fix-merge-conflicts:
-    name: Ask Copilot to fix merge conflicts
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.user.login == 'dependabot[bot]'
-    steps:
-      # GitHub takes a few seconds to compute mergeability after a push — poll until it's no longer UNKNOWN.
-      - name: Wait for mergeability to be computed
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          for i in $(seq 1 10); do
-            state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json mergeStateStatus --jq '.mergeStateStatus')
-            echo "Attempt $i: mergeStateStatus=$state"
-            [[ "$state" != "UNKNOWN" ]] && break
-            sleep 10
-          done
-
-      - name: Ask Copilot to resolve the conflict, if there is one
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-
-          state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json mergeStateStatus --jq '.mergeStateStatus')
-          if [[ "$state" != "DIRTY" ]]; then
-            echo "Not conflicted (mergeStateStatus=$state)."
-            exit 0
-          fi
-
-          marker="<!-- dependabot-autofix: conflict $HEAD_SHA -->"
-          existing=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments \
-            --jq ".comments[] | select(.body | contains(\"$marker\")) | .id")
-          if [[ -n "$existing" ]]; then
-            echo "Already asked about commit $HEAD_SHA, skipping."
-            exit 0
-          fi
-
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(printf '%s\n@copilot this Dependabot PR has a merge conflict with main. Resolve it, keeping the dependency version bump intact — do not revert the version change itself, only reconcile the surrounding diff.' "$marker")"
-
-  fix-failing-checks:
-    name: Ask Copilot CLI to fix a failing check
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_run' &&
+  autofix:
+    name: Fix the failing check with Copilot CLI
+    if: >
       github.event.workflow_run.conclusion == 'failure' &&
-      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
-      actions: write
       copilot-requests: write
+      pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
-      REPO: ${{ github.repository }}
-      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
       RUN_ID: ${{ github.event.workflow_run.id }}
-      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      CHECK_NAME: ${{ github.event.workflow_run.name }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
     steps:
-      - name: Get PR number for the failed run
-        id: get-pr
-        run: |
-          pr_number=$(gh pr list --repo "$REPO" --state open --head "$HEAD_BRANCH" \
-            --json number,author --jq '.[] | select(.author.login == "app/dependabot") | .number' | head -1)
-          if [[ -z "$pr_number" ]]; then
-            echo "No open Dependabot PR found for branch $HEAD_BRANCH."
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Count previous autofix attempts on this PR
-        id: attempts
-        if: steps.get-pr.outputs.found == 'true'
-        env:
-          PR_NUMBER: ${{ steps.get-pr.outputs.pr_number }}
-        run: |
-          count=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments \
-            --jq '[.comments[] | select(.body | contains("<!-- dependabot-ci-autofix:"))] | length')
-          echo "Previous attempts on PR #$PR_NUMBER: $count"
-          if [[ "$count" -lt 2 ]]; then
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Give up after 2 attempts
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'false'
-        run: echo "Already tried twice on this PR, not attempting again — needs a human."
-
-      - name: Checkout PR branch
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ env.HEAD_BRANCH }}
-
-      - name: Install Copilot CLI
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true'
-        run: npm install -g @github/copilot
-
-      - name: Ask Copilot CLI to fix the failure
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true'
-        working-directory: examples/dependabot-test-fixture
-        run: |
-          copilot -p "A CI check is failing in this directory after a dependency version bump (failed run: $RUN_URL). Run 'go build ./...', 'go vet ./...', AND 'go test ./...' — all three, do not assume which one is failing — to find the actual error, then edit the .go source files as needed to fix it — do not modify go.mod or go.sum, the dependency version bump itself is correct and must stay exactly as it is. Keep iterating until all three commands succeed." \
-            -s --allow-tool='write' --allow-tool='shell(go build:*)' --allow-tool='shell(go vet:*)' --allow-tool='shell(go test:*)' \
-            --deny-tool='shell(git:*)' --max-ai-credits 30
-
-      - name: Verify the fix actually builds (never trust Copilot's own self-report)
-        id: verify
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true'
-        working-directory: examples/dependabot-test-fixture
-        run: |
-          if go build ./... && go vet ./... && go test ./...; then
-            echo "verified=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "verified=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Commit, push, and re-trigger CI
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true' && steps.verify.outputs.verified == 'true'
-        env:
-          PR_NUMBER: ${{ steps.get-pr.outputs.pr_number }}
+      - name: Resolve the PR this run belongs to
+        id: pr
         run: |
           set -euo pipefail
+          number=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty')
+          if [[ -z "$number" ]]; then
+            echo "No same-repo PR associated with this run — nothing to fix here."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
-          if git diff --quiet; then
-            echo "Copilot made no changes; nothing to push."
-            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(printf '<!-- dependabot-ci-autofix: run %s --><br>Copilot CLI looked at the failing check (%s) but made no changes. Needs a human.' "$RUN_ID" "$RUN_URL")"
+      - name: Classify the dependency bump (patch/minor/major)
+        id: bump
+        if: steps.pr.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          pr="${{ steps.pr.outputs.number }}"
+
+          # Dependabot's own commit trailer already says which semver level this is.
+          commit_message=$(gh pr view "$pr" --repo "${GITHUB_REPOSITORY}" --json commits --jq '.commits[-1].messageBody')
+
+          level=patch
+          if grep -q 'update-type: version-update:semver-major' <<< "$commit_message"; then
+            level=major
+          elif grep -q 'update-type: version-update:semver-minor' <<< "$commit_message"; then
+            level=minor
+          fi
+          echo "level=$level" >> "$GITHUB_OUTPUT"
+
+          if [[ "$level" == "major" ]]; then
+            gh pr edit "$pr" --repo "${GITHUB_REPOSITORY}" --add-label "needs-human-review"
+          fi
+
+      - name: Claim this check or back off
+        id: claim
+        if: steps.pr.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          pr="${{ steps.pr.outputs.number }}"
+
+          existing_comments=$(gh pr view "$pr" --repo "${GITHUB_REPOSITORY}" --json comments --jq '.comments[].body')
+
+          marker="<!-- copilot-cli-autofix: check=\"$CHECK_NAME\" sha=\"$HEAD_SHA\" -->"
+          if grep -qF -- "$marker" <<< "$existing_comments"; then
+            echo "Already attempted (or attempting) a fix for $CHECK_NAME @ $HEAD_SHA — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          # Per-check cap: this exact check has already failed-and-been-attempted this many times.
+          check_attempts=$(grep -cF -- "check=\"$CHECK_NAME\"" <<< "$existing_comments" || true)
+          # Global cap: total autofix attempts on this PR, across every check, so one flaky check can't alone
+          # burn the whole budget but the PR as a whole still has a hard ceiling.
+          total_attempts=$(grep -cF -- 'copilot-cli-autofix: check="' <<< "$existing_comments" || true)
+
+          if [[ "$check_attempts" -ge "$PER_CHECK_ATTEMPT_CAP" || "$total_attempts" -ge "$GLOBAL_ATTEMPT_CAP" ]]; then
+            reason="\`$CHECK_NAME\` has failed $check_attempts autofix attempts"
+            [[ "$total_attempts" -ge "$GLOBAL_ATTEMPT_CAP" ]] && reason="this PR has hit $total_attempts total autofix attempts across all checks"
+            echo "Cap hit ($reason) — leaving it for a human from here."
+            gh pr edit "$pr" --repo "${GITHUB_REPOSITORY}" --add-label "needs-human-review"
+            gh pr comment "$pr" --repo "${GITHUB_REPOSITORY}" --body "Copilot CLI autofix is giving up: $reason. Needs a human from here."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR branch
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Get the failure log for this run
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          gh run view "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --log-failed > failure.log 2>&1 || true
+          tail -c 20000 failure.log > failure-excerpt.log
+
+      - name: Get the PR diff (excluding go.sum noise)
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          git diff "origin/main...HEAD" -- . ':!go.sum' ':!**/go.sum' > pr-diff.log 2>&1 || true
+          head -c 8000 pr-diff.log > pr-diff-excerpt.log
+
+      - name: Get Copilot's existing review comments on this PR
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          pr="${{ steps.pr.outputs.number }}"
+          {
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr/reviews" \
+              --jq '.[] | select(.user.login == "copilot-pull-request-reviewer[bot]") | .body' 2>/dev/null || true
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr/comments" \
+              --jq '.[] | select(.user.login == "copilot-pull-request-reviewer[bot]") | (.path + ":" + (.line // "?" | tostring) + ": " + .body)' 2>/dev/null || true
+          } > copilot-review.log
+          head -c 4000 copilot-review.log > copilot-review-excerpt.log
+
+      - name: Install Copilot CLI
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        run: npm install -g @github/copilot
+
+      - name: Configure git identity for the fix commit
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          # -s (signoff) adds a Signed-off-by trailer using the identity just configured above — otherwise
-          # this commit fails the repo's own DCO check, which would be a real bug: the autofix commit itself
-          # blocking the PR it's trying to unblock.
-          git commit -s -m "$(printf 'Auto-fix: resolve build failure after dependency bump\n\nFixed by Copilot CLI in response to failed run %s.\nVerified locally with go build && go vet before pushing.' "$RUN_URL")"
-          git push origin "HEAD:$HEAD_BRANCH"
 
-          # GITHUB_TOKEN-authored pushes don't trigger new workflow runs, so kick CI explicitly.
-          gh workflow run "dependabot-test-fixture-ci.yml" --repo "$REPO" --ref "$HEAD_BRANCH"
-
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(printf '<!-- dependabot-ci-autofix: run %s --><br>Copilot CLI fixed the failing check (%s) and pushed a commit. Re-running CI now.' "$RUN_ID" "$RUN_URL")"
-
-      - name: Comment if the fix did not verify
-        if: steps.get-pr.outputs.found == 'true' && steps.attempts.outputs.proceed == 'true' && steps.verify.outputs.verified == 'false'
-        env:
-          PR_NUMBER: ${{ steps.get-pr.outputs.pr_number }}
+      - name: Ask Copilot CLI to fix the failure
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
         run: |
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(printf '<!-- dependabot-ci-autofix: run %s --><br>Copilot CLI attempted to fix the failing check (%s) but the fix did not verify locally (go build/go vet still failing). Needs a human.' "$RUN_ID" "$RUN_URL")"
+          set -euo pipefail
+          prompt=$(cat <<EOF
+          The GitHub Actions check "$CHECK_NAME" is failing on this branch (a Dependabot dependency-bump PR,
+          classified as a ${{ steps.bump.outputs.level }}-semver bump). Its failure log (may be truncated to the
+          last part) is below. Make the smallest change that fixes the failure — do not refactor, do not touch
+          unrelated files, do not change the dependency version Dependabot chose. If the fix is a Go code change,
+          run the relevant \`make\` target (e.g. \`make fmt vet\`, \`make test-unit\`, \`make codegen-all-code\`)
+          to confirm it actually passes before you stop.
+
+          Two cases where you should make NO changes and say so instead of guessing:
+          - The failure is a stale test fixture (e.g. a hardcoded expected value in a _test.go file no longer
+            matches real output because of the dependency bump) — in that case DO fix it, that's in scope.
+          - The failure's real cause is outside this PR's own files — a pinned tool version under
+            .github/workflows/** that's now incompatible with a go.mod toolchain bump, or a genuine inconsistency
+            between the versions in this dependency bump itself. Neither is fixable by editing this PR's source
+            without either changing a dependency version or editing shared CI config, both out of scope here.
+
+          --- failure log ---
+          $(cat failure-excerpt.log)
+
+          --- this PR's diff (go.sum omitted) ---
+          $(cat pr-diff-excerpt.log)
+
+          --- Copilot's existing review comments on this PR, if any (may already explain the failure) ---
+          $(cat copilot-review-excerpt.log)
+          EOF
+          )
+          copilot --allow-tool 'write' \
+            --allow-tool 'shell(git:*)' \
+            --allow-tool 'shell(go:*)' \
+            --allow-tool 'shell(make:*)' \
+            --no-ask-user \
+            --prompt "$prompt" | tee copilot-output.log
+
+      - name: Commit and push the fix, if any
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        id: push
+        run: |
+          set -euo pipefail
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Copilot CLI made no changes."
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git add -A
+          git commit --signoff -m "fix: address failing $CHECK_NAME check
+
+          Copilot-CLI-autofix: $HEAD_SHA"
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Report the outcome on the PR
+        if: steps.pr.outputs.skip == 'false' && steps.claim.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          pr="${{ steps.pr.outputs.number }}"
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}"
+          # Copilot CLI's own explanation of what it did (or why it didn't), trimmed to keep the comment readable.
+          reasoning=$(tail -c 3000 copilot-output.log)
+
+          if [[ "${{ steps.push.outputs.pushed }}" == "true" ]]; then
+            headline="Copilot CLI fixed the failing \`$CHECK_NAME\` check ($run_url) and pushed a commit. Re-running CI now."
+          else
+            headline="Copilot CLI looked at the failing \`$CHECK_NAME\` check ($run_url) but didn't make a change — needs a human look."
+          fi
+
+          marker="<!-- copilot-cli-autofix: check=\"$CHECK_NAME\" sha=\"$HEAD_SHA\" -->"
+          body=$(printf '%s\n%s\n\n<details><summary>Copilot CLI reasoning</summary>\n\n```\n%s\n```\n</details>' "$marker" "$headline" "$reasoning")
+          gh pr comment "$pr" --repo "${GITHUB_REPOSITORY}" --body "$body"
+
+  report-all-green:
+    name: Label the PR once every check is green
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Check whether autofix ever touched this PR, and whether it's all green now
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty')
+          if [[ -z "$pr" ]]; then
+            echo "No same-repo PR associated with this run."
+            exit 0
+          fi
+
+          existing_comments=$(gh pr view "$pr" --repo "${GITHUB_REPOSITORY}" --json comments --jq '.comments[].body')
+          if ! grep -qF -- 'copilot-cli-autofix:' <<< "$existing_comments"; then
+            echo "Autofix never engaged with this PR — nothing to report."
+            exit 0
+          fi
+
+          failing=$(gh pr checks "$pr" --repo "${GITHUB_REPOSITORY}" --json state \
+            --jq '[.[] | select(.state == "FAILURE" or .state == "ERROR" or .state == "PENDING")] | length')
+          if [[ "$failing" != "0" ]]; then
+            echo "Still $failing check(s) not green — not done yet."
+            exit 0
+          fi
+
+          # A major-bump skip means a human still needs to look regardless of CI going green — only clear the
+          # label when it was set for the (now resolved) cap-hit reason.
+          if grep -qF -- 'major-bump-skip' <<< "$existing_comments"; then
+            gh pr comment "$pr" --repo "${GITHUB_REPOSITORY}" --body "All checks are green, but this is still a major-semver bump — leaving \`needs-human-review\` for a maintainer to check for breaking changes."
+          else
+            gh pr edit "$pr" --repo "${GITHUB_REPOSITORY}" --remove-label "needs-human-review" || true
+            gh pr comment "$pr" --repo "${GITHUB_REPOSITORY}" --body "All checks are green. Ready for human review/merge."
+          fi
