@@ -11,7 +11,7 @@ import (
 // because of the dependency bump this PR makes. This one is deterministic by construction — it reads go.mod
 // directly — rather than relying on an upstream library's behavior actually differing between versions, which
 // well-maintained libraries rarely do across a minor/patch bump.
-const expectedGoCmpVersion = "v0.5.9"
+const expectedGoCmpVersion = "v0.7.0"
 
 func TestGoCmpVersionPin(t *testing.T) {
 	data, err := os.ReadFile("go.mod")
