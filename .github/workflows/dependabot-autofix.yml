@@ -282,6 +282,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       RUN_ID: ${{ github.event.workflow_run.id }}
@@ -327,6 +328,17 @@ jobs:
           git push origin "HEAD:refs/heads/$HEAD_BRANCH"
           echo "pushed=true" >> "$GITHUB_OUTPUT"
 
+      # A push authored by this workflow's own GITHUB_TOKEN doesn't get the "respects permissions" exemption
+      # that a push from dependabot[bot] itself (or a human) gets — confirmed live: the resulting pull_request
+      # run for the fix commit above came back action_required with zero jobs, actor AND triggering_actor both
+      # github-actions[bot]. workflow_dispatch was never subject to that gate, so re-trigger CI explicitly
+      # instead of relying on the push to do it. Needs workflow_dispatch: {} on the target check's own workflow
+      # file (on the branch being dispatched against, not just on main) — add it to every workflow in this
+      # file's `workflows:` trigger list that doesn't already have it.
+      - name: Explicitly re-trigger CI (the push above won't do it)
+        if: steps.push.outputs.pushed == 'true'
+        run: gh workflow run "$CHECK_NAME" --repo "${GITHUB_REPOSITORY}" --ref "$HEAD_BRANCH"
+
       - name: Report the outcome by editing the claimed comment
         run: |
           set -euo pipefail
@@ -348,9 +360,15 @@ jobs:
 
   report-all-green:
     name: Label the PR once every check is green
+    # Deliberately no actor.login == 'dependabot[bot]' check here, unlike resolve/apply-fix — the green run
+    # this reacts to is often the one apply-fix itself triggered via workflow_dispatch (see "Explicitly
+    # re-trigger CI" above), whose actor is github-actions[bot], not dependabot[bot]; confirmed live that
+    # gate would otherwise skip this every time after a real autofix commit. Safe to drop here specifically
+    # because this job is read-only (no AI spend, no push) and the step below already requires a
+    # copilot-cli-autofix: marker comment to exist — which only resolve ever posts, and resolve itself
+    # already enforced the real actor check before posting it. That's the actual authorization boundary.
     if: >
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
