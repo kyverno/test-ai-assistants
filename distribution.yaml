@@ -1,14 +1,32 @@
-# Hermes Profile Distribution manifest — NOT used in Phase 0.
-#
-# This becomes relevant if/when kyctrl's profiles get packaged for reuse by
-# other CNCF projects (e.g. "install the dependabot-bot pattern in your own
-# repo"). Phase 0 runs entirely from this repo mounted directly into the
-# Hermes container (see docker-compose.yml) — nothing here is read yet.
-#
-# Left as a stub rather than deleted so the repo's target shape (per the
-# build plan) is visible from day one. Fill in once there's a second
-# consumer of these profiles.
+name: kyverno-assistant
+version: 0.1.0
+description: "On-demand PR review queue assistant for a Kyverno maintainer"
+hermes_requires: ">=0.12.0"
+author: "Suhaani Agarwal"
+license: "MIT"
 
-version: 1
-name: kyctrl
-status: not-yet-implemented
+env_requires:
+  - name: GITHUB_TOKEN
+    description: "Fine-grained PAT: Contents Read, Pull requests Read & Write, Issues Read & Write, Checks Read, plus Code scanning alerts Read, Dependabot alerts Read, Secret scanning alerts Read, and org Members Read (for CODEOWNERS team resolution). No merge, no admin, no Contents Write."
+    required: true
+  - name: MAINTAINER_GITHUB_LOGIN
+    description: "GitHub username of the maintainer this instance serves — used to filter PRs where they're a requested reviewer via CODEOWNERS"
+    required: true
+  - name: SLACK_BOT_TOKEN
+    description: "Slack Bot User OAuth Token (xoxb-*) — needs chat:write, channels:history, channels:read, app_mentions:read"
+    required: true
+  - name: SLACK_APP_TOKEN
+    description: "Slack App-Level Token (xapp-*), from Socket Mode settings"
+    required: true
+  - name: SLACK_ALLOWED_USERS
+    description: "Comma-separated Slack member ID(s) authorized to use this assistant (should be just the installing maintainer)"
+    required: true
+  - name: SLACK_HOME_CHANNEL
+    description: "Maintainers channel ID to read priority signals from and post the queue in"
+    required: true
+  - name: KYVERNO_REPO
+    description: "owner/repo this assistant manages (default while prototyping: kyverno/test-ai-assistants)"
+    required: true
+  - name: ANTHROPIC_API_KEY
+    description: "Model provider key (swap via `hermes model` for a different provider)"
+    required: true

@@ -1,130 +1,90 @@
-# Deployment — Phase 0 runbook
+# Deployment
 
-Order matters here: the webhook URL has to exist before the GitHub App can
-be registered, and the App has to exist before it can be installed on a
-repo. Each step lists what's already built vs. what's a manual action.
+kyverno-assistant is a Hermes profile distribution — there's no server to stand
+up, no webhook receiver, no GitHub App to register. Install flow only.
 
-## 1. Prerequisites (manual)
-
-- [ ] A **Socket.dev** account + API key (free tier): https://socket.dev
-- [ ] A **dedicated sandbox GitHub repo** to test against (not
-      `kyverno/kyverno`, not this repo). `gh repo create <name> --public`
-      works if you want me to create it.
-- [ ] Docker running locally (`docker --version` — confirmed available:
-      28.3.2). `gh` CLI authenticated (confirmed: `suhaani-agarwal`).
-      `ngrok` installed and already has an authtoken configured — use this
-      instead of the plan's original `cloudflared` assumption, since it's
-      already set up on this machine and ngrok's free tier includes one
-      static domain (stable URL across restarts).
-
-## 2. Bring Hermes up locally
+## Install
 
 ```bash
-cp .env.example .env
-# fill in ANTHROPIC_API_KEY at minimum to start the gateway;
-# the rest (GITHUB_*, KYCTRL_READONLY_GITHUB_TOKEN, SOCKET_DEV_API_KEY)
-# are needed before the dependabot-pr route will work end to end, but
-# aren't needed just to confirm the container starts.
-./setup.sh
-docker compose logs -f gateway   # confirm it starts and binds :8644
+hermes profile install github.com/kyverno/kyverno-assistant --alias kyverno
 ```
 
-## 3. Expose :8644 publicly (before the App exists)
+(While this is still prototyped in this sandbox repo rather than published
+separately, install from a local checkout instead: `hermes profile install .
+--alias kyverno`.)
+
+This prompts for the env vars listed in `distribution.yaml`'s `env_requires` and
+writes them to the installed profile's `.env` (`~/.hermes/profiles/kyverno/.env`
+— separate from this repo, never committed):
+
+- `GITHUB_TOKEN` — fine-grained PAT: Contents Read, Pull requests Read & Write,
+  Issues Read, Checks Read. Do **not** grant Contents Write or any merge/admin
+  scope — the toolset doesn't call a merge endpoint, but the token shouldn't be
+  able to either (belt and suspenders, see `docs/architecture.md`).
+- `MAINTAINER_GITHUB_LOGIN` — the installing maintainer's GitHub username.
+- `SLACK_BOT_TOKEN` (`xoxb-*`) / `SLACK_APP_TOKEN` (`xapp-*`, Socket Mode) — the
+  Slack app's bot and app-level tokens. **Two different things use these** (see
+  "Two separate Slack credential consumers" in `docs/architecture.md`):
+  Hermes' own chat interface needs both, plus Socket Mode enabled and
+  `app_mentions:read` + `message.channels` event subscriptions; the `slack`
+  MCP server (reading/posting `SLACK_HOME_CHANNEL`) only ever uses
+  `SLACK_BOT_TOKEN`, never `SLACK_APP_TOKEN`. Scopes needed either way:
+  `chat:write`, `channels:history`, `channels:read`, `app_mentions:read`.
+  Reinstall the app after subscribing to events. Note: the `slack` MCP
+  server validates its token at process startup and exits immediately on an
+  invalid one — a wrong/expired `SLACK_BOT_TOKEN` means that container never
+  starts, not that it starts with reduced capability.
+- `SLACK_ALLOWED_USERS` — the installing maintainer's Slack member ID (keeps
+  this instance answering only them).
+- `SLACK_HOME_CHANNEL` — the maintainers channel to read priority signals from
+  and post the queue in. Invite the bot to it (`/invite @kyverno-assistant`).
+- `KYVERNO_REPO` — `owner/repo` this instance manages. Defaults to
+  `kyverno/test-ai-assistants` while prototyping; repoint at `kyverno/kyverno`
+  once validated.
+- `ANTHROPIC_API_KEY` — model provider key. Swap providers anytime with
+  `hermes model`, no config changes needed.
+
+## Run
 
 ```bash
-ngrok http --domain=<your-reserved-static-domain>.ngrok-free.app 8644
+kyverno chat
 ```
 
-If you haven't reserved a static domain yet: https://dashboard.ngrok.com/domains
-(free, one included). Without it, ngrok gives a random URL that changes
-every restart — fine for a single test session, painful once you're
-re-registering the App's webhook URL every time Hermes restarts. Note the
-resulting `https://...ngrok-free.app` URL — it's the GitHub App's webhook
-URL in the next step, and it's also what changes (App settings need a
-one-line edit) once this moves to the Linode node.
+or talk to it in the configured Slack channel.
 
-## 4. Register the `@kyctrl-bot` GitHub App (manual, GitHub UI)
+## Update
 
-1. https://github.com/settings/apps/new (or your org's equivalent).
-2. Webhook URL: the ngrok URL from step 3, path `/webhooks/dependabot-pr`
-   (i.e. `https://<domain>/webhooks/dependabot-pr` — this is the top-level
-   default-profile route path from `config.yaml`, not a `/p/<profile>/`
-   path, since the webhook platform itself only lives on the default
-   profile).
-3. Webhook secret: generate one (`openssl rand -hex 32`), put it in `.env`
-   as `GITHUB_WEBHOOK_SECRET`, enter the same value in the App form.
-4. Permissions: Pull requests (Read & write), Issues (Read & write),
-   Contents (Read-only), Checks (Read-only).
-5. Subscribe to events: Pull request, Issue comment.
-6. Create the App. Generate a private key, download the `.pem`, and save it
-   as `.hermes-data/secrets/kyctrl-bot.pem` (matching `GITHUB_APP_PRIVATE_KEY_PATH`
-   in `.env.example`, `/opt/data/secrets/kyctrl-bot.pem` from the
-   container's side). `.hermes-data/` is Hermes's gitignored runtime data
-   directory (see `docker-compose.yml`'s header comment) — `./setup.sh`
-   syncs tracked config *into* it but never touches anything else there,
-   so the key is safe to drop in and leave.
-7. Note the App ID → `.env`'s `GITHUB_APP_ID`.
+```bash
+hermes profile update kyverno
+```
 
-**Don't commit the `.pem`.** `.gitignore` already excludes `*.pem`, but
-double-check `git status` before your first commit regardless — a leaked
-App private key is a full-compromise-of-the-bot-identity event, not a
-"rotate one token" event.
+Pulls the latest distribution version; the maintainer's own `.env`, memories,
+and sessions are untouched.
 
-## 5. Get the comment-capable token
+## Validation plan
 
-`KYCTRL_READONLY_GITHUB_TOKEN` (see `.env.example`'s comment on exact
-scopes) is a separate fine-grained PAT, not the App's own credential —
-create it at https://github.com/settings/personal-access-tokens/new,
-scoped to the sandbox repo only, Contents: Read, Pull requests: Read,
-Issues: Read & Write, Checks: Read.
+Before anything past v1 (see `docs/architecture.md`), validate end-to-end with
+2-3 real maintainers on real PR queues — install, point at their actual repo,
+confirm the queue reasoning (stacked PRs, generated-file conflicts, post-merge
+CI risk) matches what they'd conclude by hand. Only after that is v2 (merge,
+gated per the archived kyctrl pattern) worth building.
 
-## 6. Install the App + auto-request workflow on the sandbox repo
+Before any of that: `skills/` still needs writing (see README status note),
+and a real `hermes profile install .` has never been run against this repo.
+When it is, confirm the registered toolset matches `docs/architecture.md`'s
+"How the toolset allowlist is actually verified" section — the GitHub side of
+that check can be repeated without any credentials by running the real
+container and diffing its tool list:
 
-1. Install `@kyctrl-bot` on the sandbox repo (GitHub App's install page).
-2. Copy `.github/workflows/copilot-auto-request.yml` and
-   `kyctrl-auto-merge.yml` into the sandbox repo (Phase 0 targets a
-   sandbox repo, so these workflows need to physically live there, not
-   just in this kyctrl repo — this repo is Hermes's brain, the sandbox
-   repo is where the workflows actually run).
-3. Confirm the sandbox repo's plan supports `gh pr edit --add-reviewer
-   @copilot` (Copilot code review availability varies by plan) — open any
-   test PR and check the workflow run succeeds.
+```bash
+docker run -i --rm \
+  -e GITHUB_PERSONAL_ACCESS_TOKEN=dummy -e GITHUB_LOCKDOWN_MODE=1 \
+  -e GITHUB_TOOLSETS=all -e GITHUB_EXCLUDE_TOOLS="$(python3 -c "import yaml;print(yaml.safe_load(open('config.yaml'))['mcp_servers']['github']['env']['GITHUB_EXCLUDE_TOOLS'])")" \
+  ghcr.io/github/github-mcp-server
+# then speak MCP `initialize` + `tools/list` over its stdio and compare
+# against mcp_servers.github.tools.include in config.yaml.
+```
 
-## 7. End-to-end test
-
-Open a PR on the sandbox repo that mimics a Dependabot update (easiest:
-let Dependabot itself open one — add a trivial `dependabot.yml` with a
-`schedule: daily` for an ecosystem in `settings.yaml`'s
-`auto_merge_ecosystems`, or manually craft a branch named
-`dependabot/npm_and_yarn/<pkg>-<version>` with a commit message containing
-the `updated-dependencies:` trailer block `scripts/dependabot-policy-engine.py`
-parses).
-
-Expect, within roughly 30 seconds:
-1. The Copilot-review-request workflow runs.
-2. A `@kyctrl-bot` comment appears with the verdict and reasons.
-3. If APPROVE: `kyctrl-auto-merge.yml` fires and the PR is merged.
-
-If nothing happens: `docker compose logs -f gateway` first — most Phase 0
-failures are webhook delivery (check the App's "Recent Deliveries" tab for
-the HTTP status Hermes returned) or the policy engine script erroring
-before printing anything (a nonzero exit or exception makes Hermes treat
-the event as ignored, per the `script` hook contract — same visible
-behavior as a deliberate `[SILENT]`, so check logs, not just GitHub's UI).
-
-## Known-unverified items to confirm on the first real run
-
-- Socket.dev's `/purl` request/response shape and the ecosystem-name
-  mapping in `get_socket_score()` — confirmed from docs search, not a live
-  call. See `docs/architecture.md`'s "Known gaps".
-- The exact `@kyctrl-bot` App login string used in `kyctrl-auto-merge.yml`'s
-  trigger condition.
-
-## Later: moving to Linode
-
-Once Jim's Linode access lands: same `docker-compose.yml` runs there
-unchanged (Linux natively supports `network_mode: host`, which also
-unlocks the dashboard service — see the compose file's header comment for
-what to change). Swap the App's webhook URL from the ngrok domain to the
-Linode node's address, drop the ngrok tunnel. No code or config changes
-beyond that URL.
+The Slack side needs a real `SLACK_MCP_XOXB_TOKEN` first — the server exits
+before the MCP handshake on an invalid one (see above), so this can't be
+checked credential-free the way GitHub's can.

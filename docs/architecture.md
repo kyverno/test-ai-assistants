@@ -1,112 +1,183 @@
 # Architecture
 
-## The security model
+**Status: skeleton only.** `distribution.yaml` / `SOUL.md` / `config.yaml` exist
+and are verified against Hermes' real config schema (see "How the toolset
+allowlist is actually verified" below). `skills/kyverno-context`,
+`skills/pr-queue`, and `skills/pr-actions` — referenced throughout this doc and
+the README — do not exist yet. Nothing below describes working behavior; it
+describes the design those skills still need to implement.
 
-**The LLM never holds a token that can take a privileged action.** This is
-enforced in three independent places, not by prompt instructions:
+kyverno-assistant is a [Hermes profile distribution](https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions):
+`distribution.yaml` + `SOUL.md` + `config.yaml` + `skills/` + `hooks/`, git-installed
+by a maintainer with `hermes profile install`, updated with `hermes profile update`.
+It's a single, on-demand agent process talking to one maintainer over Slack/CLI —
+not a webhook-triggered service (that was the previous, abandoned `kyctrl` design;
+see `docs/archive/kyctrl-phase0-notes.md`). This is also a deliberate divergence
+from where the wider ecosystem is heading — GitHub's own Agentic Workflows
+(technical preview, Feb 2026) treats webhook/Actions-triggered issue and PR
+automation as the default pattern. v1 chooses human-invoked-only on purpose,
+matching SOUL.md's "guest doing mechanical work" framing; any move to
+triggered/autonomous operation is a v2+ decision, not an oversight.
 
-1. **Toolsets.** `config.yaml`'s `custom_toolsets.dependabot-bot-tools` is a
-   hand-picked allowlist of read + comment tools from the `mcp-github`
-   toolset (see `mcp.json`). It deliberately omits `merge_pull_request`,
-   `pull_request_review_write`, `create_or_update_file`, `delete_file`,
-   `create_branch`, `create_repository` — every mutating tool the GitHub
-   MCP server exposes. `hermes webhook subscribe` has no `--toolsets`
-   flag, so no running agent can widen this at runtime; only a human
-   editing this file (reviewed like code) can.
-2. **The credential itself.** The GitHub MCP server (in `mcp.json`) is
-   backed by `KYCTRL_READONLY_GITHUB_TOKEN`, a fine-grained PAT scoped to
-   Contents: Read, Pull requests: Read, Issues: Read & Write, Checks: Read
-   — no write access to contents or pull requests. Even if a toolset were
-   ever misconfigured to include `merge_pull_request`, the call would fail
-   at the GitHub API level. Belt and suspenders, deliberately.
-3. **Where the actual merge happens.** `.github/workflows/kyctrl-auto-merge.yml`
-   is the only place `GITHUB_TOKEN` (Actions' own token, full permissions)
-   exists. It triggers on `issue_comment.created`, checks the comment
-   contains the literal string `/kyctrl-merge approved` AND was posted by
-   the `@kyctrl-bot` App account, then runs `gh pr merge`. Hermes posts
-   that comment; Hermes never runs that workflow or holds that token.
+MCP servers (GitHub, Slack) are declared under `config.yaml`'s `mcp_servers:`
+key, not a separate `mcp.json` — Hermes reads MCP server definitions from
+`config.yaml` itself ([MCP Config Reference](https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference));
+a standalone top-level `mcp.json` (Claude-Desktop-style) is an *import* format
+for `hermes import-agent claude-code`, not something a profile distribution's
+install reads on its own. An earlier draft of this repo had the MCP servers in
+a sibling `mcp.json`, which a real `hermes profile install` would most likely
+never load.
 
-## config.yaml vs settings.yaml
+## What it can and can't do
 
-Two config files, deliberately different audiences:
+It can read anything on `KYVERNO_REPO` (PRs, diffs, reviews, labels, CODEOWNERS,
+milestones), read the configured Slack channel, and — using the maintainer's own
+`GITHUB_TOKEN` — add labels, post comments, request changes, approve reviews, and
+rebase a branch on instruction.
 
-| | `config.yaml` | `settings.yaml` |
-|---|---|---|
-| Controls | routing, toolsets, tool grants | thresholds, toggles, allowlists |
-| Changes | who/what can act | how a bot decides |
-| Review bar | security review, like code | any maintainer |
-| Example | "dependabot-bot may call `add_issue_comment`" | "auto-merge threshold is 70" |
+**It cannot merge a PR.** There is no merge tool anywhere in the toolset — the
+same tool-absence enforcement kyctrl used, carried forward as a principle even
+though the rest of that design was abandoned: don't rely on a prompt
+instruction to withhold a privileged action, withhold the tool. This is
+enforced in three independent layers (see below), not one file. Merge is
+deferred to v2, where it should be gated behind a GitHub Actions workflow
+triggered by a specific comment (kyctrl's original pattern — see the archive
+notes) rather than given to the agent process directly.
 
-Every deterministic script reads its tunables from `settings.yaml` at
-invocation time (no caching, no restart needed) — see
-`scripts/dependabot-policy-engine.py`'s `load_settings()`.
+## How the toolset allowlist is actually verified
 
-## The repo vs. Hermes's runtime data directory
+`config.yaml`'s header comment names the three layers; here's what backs each
+one and how confident to be in it, so a future edit doesn't quietly break an
+unverified assumption:
 
-These are deliberately two different directories, learned the hard way in
-Phase 0: Hermes's `/opt/data` isn't just "where config lives" — it's where
-Hermes writes everything (state databases, per-profile sessions/memory,
-caches, cron/kanban state, a whole `lazy-packages/` Python venv, and on
-first boot it copies its own ~60 bundled skills in). An early version of
-`docker-compose.yml` mounted this repo's root directly as `/opt/data`,
-which dumped all of that into the tracked tree. It's fixed now:
-`.hermes-data/` (gitignored) is the real `/opt/data`, and `./setup.sh`
-one-directionally syncs the tracked config into it before every start.
-**Always run `./setup.sh`, never `docker compose up` directly** — that sync
-is what keeps the repo clean. See `docker-compose.yml`'s header comment for
-the full explanation.
+1. **`mcp_servers.github.env.GITHUB_EXCLUDE_TOOLS`** — the upstream
+   `github-mcp-server` container's own `--exclude-tools` flag, which its
+   `--help` output documents as disabling tools "regardless of other
+   settings." **Empirically tested**, not just read from docs: ran the real
+   `ghcr.io/github/github-mcp-server` container, did an MCP `initialize` +
+   `tools/list` handshake, and confirmed the tool list it returns with this
+   repo's exact `GITHUB_EXCLUDE_TOOLS` string is character-for-character the
+   31 tools in `tools.include` — no more, no less. Also confirmed the
+   *default* toolset (no `GITHUB_TOOLSETS` set) is missing every alert/CI
+   tool this profile needs (`list_code_scanning_alerts`,
+   `list_dependabot_alerts`, `actions_list`, `get_repository_tree`, `list_label`,
+   ...) — hence `GITHUB_TOOLSETS: "all"` plus the exclude list, rather than
+   trying to name exact toolset groups and risking a silent gap.
+2. **`mcp_servers.github.tools.include`** — Hermes' own per-tool filter,
+   matched against raw (unprefixed) tool names per the
+   [MCP feature doc](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp).
+   **Doc-verified, not live-tested against Hermes itself** (no live Hermes
+   install was run in this pass) — trust layer 1's empirical result over this
+   one if they ever disagree.
+3. **`hooks.pre_tool_call` → `hooks/block-dangerous-tools.sh`** — a shell
+   hook, `matcher`-scoped to tool names matching `merge|delete_repo|force_push`,
+   with `fail_closed: true`. **Corrected during review, not trusted on first
+   pass**: an earlier version used `hooks: [{event: ..., command: ...}]`
+   (wrong shape — the real schema is a mapping keyed by event name, e.g.
+   `hooks: {pre_tool_call: [...]}`) and read tool name from a
+   `$HOOK_TOOL_NAME` env var that Hermes never sets — it pipes the event as
+   JSON on **stdin**, always. The env-var version had been "unit-tested in
+   isolation" by exporting `HOOK_TOOL_NAME` and running the script directly,
+   which passed — but that test exercised an interface Hermes never actually
+   calls, so it gave false confidence; fed the real stdin shape, the old
+   script silently approved every tool call, including a merge. Also: in
+   Hermes' own vocabulary `{"action": "approve"}` means *escalate to the
+   human-approval gate*, not "allow" (unlike Claude Code's meaning of the
+   same word) — a naive fix of only the stdin bug would have made every
+   tool call require manual approval instead. Fixed now: schema corrected
+   against [the real hooks doc](https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks)
+   (exact YAML shape, JSON wire protocol, and fail-open/fail-closed table
+   all read directly, not summarized), script reads `tool_name` via `jq`
+   from stdin, and — since the `matcher` means every invocation is already
+   a match — always blocks; there's no non-blocking branch left to get
+   wrong. Verified by piping a real `pre_tool_call`-shaped JSON payload to
+   the script directly and confirming the block JSON comes back (see repo
+   history). Still never exercised inside a running Hermes process, and
+   shell hooks fail open by default — which is exactly why `fail_closed:
+   true` is set, not omitted.
 
-## Why Copilot, not CodeRabbit
+Slack is narrower in scope (only `conversations_history` and
+`conversations_add_message` are ever wanted) and gets one server-side layer:
+`SLACK_MCP_ENABLED_TOOLS=conversations_history` restricts the always-on read
+tools, while `conversations_add_message` stays gated by
+`SLACK_MCP_ADD_MESSAGE_TOOL=${SLACK_HOME_CHANNEL}` alone — deliberately *not*
+also listed in `SLACK_MCP_ENABLED_TOOLS`, because that server's own docs say a
+write tool listed there is enabled "without channel restrictions," which would
+undo the channel scoping. This layer could not be empirically tested the way
+GitHub's was: `korotovsky/slack-mcp-server` validates its Slack token at
+process startup and calls `log.Fatal` on failure, before ever reaching the MCP
+handshake — so testing it for real needs a valid `SLACK_MCP_XOXB_TOKEN`, which
+wasn't available in this pass. Worth doing before install, not blindly
+trusted off docs alone. That startup-fatal behavior is itself worth knowing:
+an expired or wrong Slack token means the container never starts, not that it
+starts with degraded capability.
 
-The original design used CodeRabbit (free-forever Pro tier for public
-repos) as the "something read the diff" signal. This build uses GitHub
-Copilot's PR review instead, requested explicitly by
-`.github/workflows/copilot-auto-request.yml` on every PR (Copilot doesn't
-auto-review without an org-level rule). The check itself —
-`skills/copilot-review-check.md` — is written as a shared pattern any
-PR-touching bot uses, not something specific to one bot: it's a
-downgrade-only gate (can turn an APPROVE into a FLAG, never the reverse),
-layered on top of the deterministic checks, never a replacement for them.
+It also cannot re-trigger or automatically detect post-merge CI failures — that
+would need a webhook receiver or a polling loop, both out of scope for v1. If a
+maintainer mentions in conversation that CI broke on `main`, the `pr-queue` skill
+can take that as input and flag which queued PRs likely overlap the break by
+touched files — but this is conversational, not monitored.
 
-## Cross-bot handoffs: trigger comments, not A2A
+## Why queue reasoning has to know about codegen and CI structure
 
-Hermes's agent-to-agent messaging (A2A) injects tasks into one *live*
-gateway session — it's built for one continuously-running agent process,
-not for bridging two independent webhook-triggered runs. Every handoff in
-this design (e.g. triage-bot → reproduction-bot, from Phase 2 on) goes
-through a GitHub comment containing a trigger string
-(`/kyctrl-reproduce ...`) that fires a *separate* webhook route bound to
-the receiving bot's profile. dependabot-bot doesn't need this in Phase 0
-(single bot, no handoff), but the `dependabot-pr` route is written the
-same way any future route will be, for consistency.
+Two facts about the real `kyverno/kyverno` build, confirmed directly against its
+`Makefile` and `.github/workflows/` rather than assumed:
 
-## Multi-profile gateway constraints (why config.yaml looks the way it does)
+- Anything under `api/**` fans out to generated code
+  (`codegen-api-register` → `zz_generated.register.go`,
+  `codegen-api-deepcopy` → `zz_generated.deepcopy.go`) plus clientset/lister/
+  informer regeneration and CRD regeneration (`config/crds`). Two open PRs that
+  both touch `api/**` will conflict on the *generated* files even if their own
+  diffs don't overlap.
+- The expensive test suite — `tests-conformance.yaml` (Chainsaw-style, matrixed
+  across 3 k8s versions), the 12-way-sharded policy-library suite, k6, perf —
+  only runs on `push` to `main`/`release-*` via `check-tests.yaml`, **never on
+  `pull_request`**. Nothing catches a bad interaction between two merged PRs
+  before it's already on `main`.
 
-- `gateway.multiplex_profiles: true` lets nine profiles share one Hermes
-  process on one port.
-- Port-binding platforms (`webhook`, `api_server`, ...) are configured
-  **only** on the default profile — never inside a `profiles/<name>/config.yaml`.
-  Secondary profiles are reached by the `profile:` field on a route (as
-  `dependabot-bot` is), or, if ever addressed directly over HTTP, via
-  `/p/<profile>/webhooks/<route>`.
-- A route's `script` hook receives the webhook payload as JSON on stdin
-  and its stdout either replaces the payload (`{...}` JSON), gets merged
-  in as `script_output` (plain text), or tells Hermes to ignore the event
-  entirely (`[SILENT]`, empty output, or nonzero exit). This is the exact
-  mechanism `dependabot-policy-engine.py` uses to inject `kyctrl_verdict`
-  into the prompt template and to silently ignore non-Dependabot PRs.
+Because of this, `pr-queue`'s ranking isn't just label/age/milestone sorting — it
+has to reason about generated-file conflicts, stacked PRs, and per-PR post-merge
+CI risk explicitly, and say so in its output. See `skills/kyverno-context/SKILL.md`
+for the codegen/CI reference knowledge and `skills/pr-queue/SKILL.md` for how it's
+used.
 
-## Known gaps (tracked, not silently ignored)
+## Why labels and CODEOWNERS are never hardcoded
 
-- **Regression-history memory** (`settings.yaml`'s
-  `dependabot_bot.check_regression_history: false`): the original brief
-  wanted the policy engine to check "has this exact dependency bump broken
-  CI before" using Hermes's memory. Not wired up — it needs Hermes's
-  per-profile `state.db` schema understood first. Left as an explicit
-  disabled flag rather than a silent no-op.
-- **Socket.dev PURL ecosystem mapping** in `get_socket_score()`
-  (`npm_and_yarn` → `npm`, `gomod` → `golang`, etc.) was written from docs
-  search, not a live API call. Confirm with a real API key before trusting
-  a FLAG/APPROVE that hinges on it — see `docs/deployment.md`'s checklist.
-- **`kyctrl-bot[bot]` login string** in `kyctrl-auto-merge.yml` assumes the
-  GitHub App's slug is exactly `kyctrl-bot`. Confirm once the App exists.
+`kyverno/kyverno`'s real label set has no "ready for review" / "needs-author-action"
+style labels — checked directly, not assumed. Any skill that hardcodes label names
+will be wrong the moment it points at a real repo instead of the sandbox one. So
+`kyverno-context` resolves labels and CODEOWNERS live (`gh label list`, reading
+`CODEOWNERS`) against whatever `KYVERNO_REPO` is configured to, and caches the
+result — it never assumes it already knows a repo's conventions.
+
+## `config.yaml`
+
+The toolset is a hand-picked allowlist, not the raw GitHub/Slack MCP toolsets:
+list/get PRs and their diffs, list reviews, list milestones, list labels, read
+CODEOWNERS, add label, post PR comment, request-changes review, approve review,
+update/rebase branch, Slack channel history read, Slack post message. No
+`merge_pull_request` equivalent, and no generic shell/`gh`-command escape hatch
+that could reach one indirectly. See "How the toolset allowlist is actually
+verified" above for what backs that claim.
+
+## Two separate Slack credential consumers
+
+There are two independent Slack integrations here, easy to conflate because
+they reuse the same bot token:
+
+- **Hermes' own `platforms.slack` adapter** — how the maintainer talks to the
+  agent (mentions, DMs). Uses `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` over
+  Socket Mode (a WebSocket connection, no public endpoint needed) via
+  Hermes' built-in Bolt integration.
+- **The `slack` MCP server** (`korotovsky/slack-mcp-server`) — a *tool* the
+  agent calls to read `SLACK_HOME_CHANNEL`'s history and post the ranked
+  queue into it. Talks to Slack's Web API directly; has no concept of Socket
+  Mode or an app-level token at all. It's given `SLACK_BOT_TOKEN` too (as
+  `SLACK_MCP_XOXB_TOKEN`), but never touches `SLACK_APP_TOKEN`.
+
+Both need the Slack app's `chat:write` / `channels:history` / `channels:read`
+scopes; only the first needs Socket Mode enabled and `app_mentions:read` /
+event subscriptions. If Slack replies work but the queue never posts to
+`SLACK_HOME_CHANNEL` (or vice versa), check which of the two integrations is
+actually failing before assuming it's one bot token problem — it's plausibly
+two independent code paths.

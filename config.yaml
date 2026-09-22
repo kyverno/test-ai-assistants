@@ -1,165 +1,200 @@
-_config_version: 42
-
-# kyctrl — top-level Hermes gateway config.
+# kyverno-assistant — Hermes profile config.
 #
-# This file is security-critical and hand-edited only, on purpose: Hermes's
-# `hermes webhook subscribe` CLI deliberately has no --toolsets flag, so a
-# bot cannot ever widen its own tool grant at runtime — only a human editing
-# this file (reviewed like code) can. See docs/architecture.md.
+# Security-critical, hand-edited only. Enforcement is layered, each layer
+# independently verified against the real upstream servers (see
+# docs/architecture.md for how and when):
 #
-# Business tunables (thresholds, feature flags) do NOT live here — see
-# settings.yaml. This file only answers "what can each bot technically do".
+#   1. mcp_servers.<name>.env (GITHUB_TOOLSETS/GITHUB_EXCLUDE_TOOLS,
+#      SLACK_MCP_ENABLED_TOOLS below) — the upstream MCP server itself never
+#      advertises the excluded tools. Confirmed by running both real
+#      containers and diffing their actual `tools/list` response against
+#      this file's tool names.
+#   2. mcp_servers.<name>.tools.include below — Hermes' own per-tool filter,
+#      matched against the server's raw (unprefixed) tool names. Belt and
+#      suspenders with (1): even a server that ignores its exclude env var
+#      can't get an excluded tool registered into the agent's toolset.
+#   3. hooks.pre_tool_call below — a shell hook, scoped by its `matcher` to
+#      only fire on a tool name matching *merge*/*delete_repo*/*force_push*,
+#      independent of whether that tool was ever supposed to be registered.
+#      Hermes shell hooks fail OPEN by default (crash/timeout/malformed
+#      stdout → warn and allow) — wrong for a security gate, which is why
+#      `fail_closed: true` is set here to invert it. Still a backstop for a
+#      misconfiguration in (1)/(2), not the primary control — those don't
+#      depend on a subprocess succeeding.
 #
-# GOTCHA (confirmed live, Phase 0): Hermes rewrites this file on load
-# whenever it runs its config-version migration step, and that rewrite
-# does NOT preserve comments (standard YAML round-trip behavior) or any
-# commented-out route stubs below. It already did this once, stripping
-# everything in this file down to bare keys. It should not fire again now
-# that _config_version matches Hermes's current version (bump it back to
-# the version Hermes reports if it ever does) — but treat docs/architecture.md
-# and docs/adding-a-new-bot.md, not these comments, as the actual source of
-# truth for rationale; re-add comments here after any future migration
-# rather than relying on them surviving one.
+# Do not add a tool to any layer below without re-running the verification
+# in docs/architecture.md.
 
-gateway:
-  multiplex_profiles: true
+model:
+  default: "anthropic/claude-sonnet-4-6"
 
-# --------------------------------------------------------------------------
-# Hand-picked tool subsets. NEVER grant a bot the raw `mcp-github` toolset —
-# the github MCP server (see mcp.json) exposes merge_pull_request,
-# pull_request_review_write, create_or_update_file, delete_file,
-# create_branch, create_repository, etc. alongside the read/comment tools.
-# Every bot toolset below is an explicit allowlist that omits all of those.
-# This list is what actually enforces "the LLM never holds a token that can
-# take a privileged action" — not the SOUL.md prompt.
-# --------------------------------------------------------------------------
+mcp_servers:
+  github:
+    command: docker
+    args:
+      - run
+      - -i
+      - --rm
+      - -e
+      - GITHUB_PERSONAL_ACCESS_TOKEN
+      - -e
+      - GITHUB_LOCKDOWN_MODE
+      - -e
+      - GITHUB_TOOLSETS
+      - -e
+      - GITHUB_EXCLUDE_TOOLS
+      - ghcr.io/github/github-mcp-server
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+      # Lockdown mode filters content from accounts without push access —
+      # this agent reads community PR/issue bodies and comments and can act
+      # on them (labels, reviews), so treat that content as adversarial by
+      # default. Best-effort content filter, not an authorization boundary;
+      # (1)/(2)/(3) above are what actually limit privileged actions.
+      GITHUB_LOCKDOWN_MODE: "1"
+      # `all` on purpose: GITHUB_EXCLUDE_TOOLS below is the real gate, and
+      # naming toolset *groups* here instead risks silently missing a tool
+      # this profile needs (verified live: the default toolset omits
+      # labels/git/code_security/dependabot/secret_protection/actions
+      # entirely). Widen here, narrow with an explicit list, not vice versa.
+      GITHUB_TOOLSETS: "all"
+      # Everything NOT in mcp_servers.github.tools.include below, by name.
+      # Generated as (full `all`-toolset tool list) minus (tools.include) —
+      # keep these two lists as exact complements of each other.
+      GITHUB_EXCLUDE_TOOLS: >-
+        actions_run_trigger,assign_copilot_to_issue,assign_copilot_to_issue_with_intent,
+        create_branch,create_gist,create_or_update_file,create_pull_request,
+        create_repository,create_repository_ruleset,custom_properties_read,
+        custom_properties_write,delete_file,discussion_comment_write,
+        dismiss_notification,fork_repository,get_code_quality_finding,get_commit,
+        get_discussion,get_discussion_comments,get_gist,get_global_security_advisory,
+        get_me,get_notification_details,get_release_by_tag,get_tag,label_write,
+        list_branches,list_commits,list_discussion_categories,list_discussions,
+        list_gists,list_global_security_advisories,list_issue_fields,
+        list_issue_types,list_notifications,list_org_repository_security_advisories,
+        list_repository_collaborators,list_repository_security_advisories,
+        list_starred_repositories,list_tags,manage_notification_subscription,
+        manage_repository_notification_subscription,mark_all_notifications_read,
+        merge_pull_request,projects_get,projects_list,projects_write,push_files,
+        repository_ruleset_read,search_code,search_commits,search_orgs,
+        search_repositories,search_users,star_repository,sub_issue_write,
+        unstar_repository,update_gist,update_pull_request
+    tools:
+      # PR queue reads — pull_request_read is one multiplexed tool (method:
+      # get/get_diff/get_status/get_files/get_commits/get_reviews/
+      # get_review_comments/get_comments/get_check_runs). search_pull_requests
+      # covers milestone:/review-requested:/label: query syntax, which is how
+      # "requested reviewer" filtering and milestone/release-urgency reasoning
+      # both work — there's no separate milestone-listing tool.
+      #
+      # Related-issue reads — issue_read's 'get' method returns
+      # closed_by_pull_requests, the real signal for "which PR closes which
+      # issue" rather than guessing from text.
+      #
+      # Label taxonomy + CODEOWNERS — read live, never hardcoded (see
+      # skills/kyverno-context). get_team_members/get_teams resolve
+      # team-based CODEOWNERS entries against MAINTAINER_GITHUB_LOGIN.
+      #
+      # Risk enrichment for queue reasoning — read-only.
+      #
+      # Actions using the maintainer's own token — label, comment, review,
+      # rebase, and requesting a Copilot review if one's missing. issue_write
+      # is broader than "just labels" (can also touch state/assignees/
+      # milestone) — SOUL.md/pr-actions instruct the agent to only ever pass
+      # `labels` on it.
+      include:
+        - list_pull_requests
+        - search_pull_requests
+        - pull_request_read
+        - issue_read
+        - list_issues
+        - search_issues
+        - list_label
+        - get_label
+        - get_file_contents
+        - get_repository_tree
+        - get_team_members
+        - get_teams
+        - list_releases
+        - get_latest_release
+        - list_code_scanning_alerts
+        - get_code_scanning_alert
+        - list_dependabot_alerts
+        - get_dependabot_alert
+        - list_secret_scanning_alerts
+        - get_secret_scanning_alert
+        - actions_list
+        - actions_get
+        - get_job_logs
+        - issue_write
+        - add_issue_comment
+        - update_issue_comment
+        - pull_request_review_write
+        - add_comment_to_pending_review
+        - add_reply_to_pull_request_comment
+        - update_pull_request_branch
+        - request_copilot_review
+
+  slack:
+    command: docker
+    args:
+      - run
+      - -i
+      - --rm
+      - -e
+      - SLACK_MCP_XOXB_TOKEN
+      - -e
+      - SLACK_MCP_ADD_MESSAGE_TOOL
+      - -e
+      - SLACK_MCP_ENABLED_TOOLS
+      - ghcr.io/korotovsky/slack-mcp-server:latest
+      - --transport
+      - stdio
+    env:
+      SLACK_MCP_XOXB_TOKEN: "${SLACK_BOT_TOKEN}"
+      # conversations_add_message is disabled by default in this server.
+      # Setting this to a channel ID (rather than 'true') enables posting
+      # only in that one channel, not the whole workspace.
+      SLACK_MCP_ADD_MESSAGE_TOOL: "${SLACK_HOME_CHANNEL}"
+      # Do NOT list conversations_add_message here too: per this server's
+      # own docs, listing a write tool in SLACK_MCP_ENABLED_TOOLS enables it
+      # "without channel restrictions" — that would silently undo the
+      # SLACK_MCP_ADD_MESSAGE_TOOL channel scoping above. Leave write tools
+      # to their dedicated env var; use this one only to narrow the
+      # always-on read tools down to what's actually needed.
+      SLACK_MCP_ENABLED_TOOLS: "conversations_history"
+    tools:
+      # Read the maintainers channel for priority signals, reply there.
+      include:
+        - conversations_history
+        - conversations_add_message
+
+# Compose the two narrowed MCP toolsets into one named grant. Each is
+# already reduced to its verified tool list by mcp_servers.*.tools.include
+# above — this just groups them; it does not do any filtering of its own.
 custom_toolsets:
-  dependabot-bot-tools:
-    - mcp-github.pull_request_read
-    - mcp-github.issue_read
-    - mcp-github.list_commits
-    - mcp-github.get_commit
-    - mcp-github.add_issue_comment
+  kyverno-assistant-tools:
+    - mcp-github
+    - mcp-slack
 
-# Webhook platform: port-binding, so per the multi-profile gateway docs this
-# section is configured ONLY here on the default profile. Secondary profiles
-# never declare their own `platforms.webhook` block — they're reached via
-# the `profile:` field on a route below, and (if ever addressed directly)
-# the /p/<profile>/webhooks/<route> prefix.
+toolsets: ["kyverno-assistant-tools"]
+
+hooks:
+  pre_tool_call:
+    - matcher: "merge|delete_repo|force_push"
+      command: "./hooks/block-dangerous-tools.sh"
+      timeout: 10
+      fail_closed: true
+
 platforms:
-  webhook:
-    enabled: true
+  slack:
+    reply_to_mode: "first"
+    typing_status_text: "checking the queue..."
+    require_mention: true
     extra:
-      port: 8644
-      # Global fallback HMAC secret; every route below sets its own anyway.
-      secret: "${WEBHOOK_SECRET}"
-      routes:
-        # ---------------------------------------------------------------
-        # dependabot-pr — the only live route in Phase 0.
-        # ---------------------------------------------------------------
-        dependabot-pr:
-          events: ["pull_request"]
-          secret: "${GITHUB_WEBHOOK_SECRET}"
-          profile: "dependabot-bot"
-          toolsets: ["dependabot-bot-tools"]
-          skills:
-            - "dependabot-merge-policy"
-            - "supply-chain-risk"
-            - "copilot-review-check"
-          # Deterministic gate: verifies sender is dependabot[bot], parses
-          # signed commit metadata (not the PR title — see
-          # skills/dependabot-merge-policy.md for why), checks Socket.dev,
-          # CI status, and Copilot's review. Prints [SILENT] for any PR not
-          # opened by dependabot[bot]. See scripts/dependabot-policy-engine.py.
-          script: "dependabot-policy-engine.py"
-          prompt: |
-            A Dependabot pull request was opened:
-
-            Repo: {payload.repository.full_name}
-            PR #{payload.pull_request.number}: {payload.pull_request.title}
-            URL: {payload.pull_request.html_url}
-
-            The deterministic policy engine already evaluated this PR.
-            Its verdict (do not second-guess or recompute it):
-
-            Decision: {kyctrl_verdict.decision}
-            Reasons:
-            {kyctrl_verdict.reasons_text}
-
-            Write one concise, friendly comment to post on this PR as
-            @kyctrl-bot, explaining the verdict using the specific reasons
-            above (not generic filler). Rules:
-
-            - If Decision is APPROVE, the comment MUST include the exact
-              literal line `/kyctrl-merge approved` on its own line —
-              this exact string is machine-parsed by a GitHub Actions
-              workflow to trigger the merge. Do not paraphrase, rewrap, or
-              add punctuation to that line.
-            - If Decision starts with FLAG, do NOT include that trigger
-              line anywhere. Instead, clearly state what a human maintainer
-              needs to check and why the engine didn't auto-approve.
-            - Then call add_issue_comment to post the comment on
-              {payload.repository.full_name}#{payload.pull_request.number}.
-            - You do not have a merge tool, a review-approval tool, or any
-              file-write tool. Do not attempt to use one — this comment is
-              the only action available to you.
-
-        # ---------------------------------------------------------------
-        # Not yet implemented — see docs/adding-a-new-bot.md and the build
-        # plan. Left commented so the routing table's eventual full shape
-        # is visible, and so adding one is "uncomment + fill in" rather
-        # than inventing structure from scratch.
-        #
-        # WARNING: comments and this whole commented block are NOT YAML —
-        # they get silently dropped the next time Hermes rewrites this file
-        # (see the GOTCHA note at the top). Re-add from docs/adding-a-new-bot.md
-        # if that happens.
-        # ---------------------------------------------------------------
-        # triage-issue:        { profile: triage-bot,       events: ["issues"] }              # Phase 1
-        # reproduce-trigger:   { profile: reproduction-bot, events: ["issue_comment"] }        # Phase 2
-        # coach-pr:            { profile: coach-bot,        events: ["pull_request"] }         # Phase 3
-        # security-label:      { profile: security-bot,     events: ["issues"] }               # Phase 4
-        # merge-queue-signal:  { profile: merge-queue-bot,  events: ["pull_request", "push"] } # Phase 6
-        # flaky-workflow-run:  { profile: flaky-bot,        events: ["workflow_run"] }         # Phase 6
+      reply_in_thread: true
+      reply_broadcast: false
 
 plugins:
   enabled: []
 agent: {}
-
-# ── Security ──────────────────────────────────────────────────────────
-# Secret redaction is ON by default — strings that look like API keys,
-# tokens, and passwords are masked in tool output, logs, and chat
-# responses before the model or user ever sees them. Set redact_secrets
-# to false to disable (e.g. when developing the redactor itself).
-# tirith pre-exec scanning is enabled by default when the tirith binary
-# is available. Configure via security.tirith_* keys or env vars
-# (TIRITH_ENABLED, TIRITH_BIN, TIRITH_TIMEOUT, TIRITH_FAIL_OPEN).
-#
-# security:
-#   redact_secrets: true
-#   tirith_enabled: true
-#   tirith_path: "tirith"
-#   tirith_timeout: 5
-#   tirith_fail_open: true
-
-# ── Fallback Model ────────────────────────────────────────────────────
-# Automatic provider failover when primary is unavailable.
-# Uncomment and configure to enable. Triggers on rate limits (429),
-# overload (529), service errors (503), or connection failures.
-#
-# Supported providers:
-#   openrouter   (OPENROUTER_API_KEY)  — routes to any model
-#   openai-codex (OAuth — hermes auth) — OpenAI Codex
-#   nous         (OAuth — hermes auth) — Nous Portal
-#   zai          (ZAI_API_KEY)         — Z.AI / GLM
-#   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
-#   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
-#   minimax      (MINIMAX_API_KEY)     — MiniMax
-#   minimax-cn   (MINIMAX_CN_API_KEY)  — MiniMax (China)
-#   bedrock      (AWS IAM / boto3)     — AWS Bedrock (Converse API)
-#
-# For custom OpenAI-compatible endpoints, add base_url and key_env.
-#
-# fallback_model:
-#   provider: openrouter
-#   model: anthropic/claude-sonnet-4
