@@ -71,12 +71,12 @@ mcp_servers:
         get_me,get_notification_details,get_release_by_tag,get_tag,label_write,
         list_branches,list_commits,list_discussion_categories,list_discussions,
         list_gists,list_global_security_advisories,list_issue_fields,
-        list_issue_types,list_notifications,list_org_repository_security_advisories,
-        list_repository_collaborators,list_repository_security_advisories,
+        list_issue_types,list_issues,list_notifications,list_org_repository_security_advisories,
+        list_pull_requests,list_repository_collaborators,list_repository_security_advisories,
         list_starred_repositories,list_tags,manage_notification_subscription,
         manage_repository_notification_subscription,mark_all_notifications_read,
         merge_pull_request,projects_get,projects_list,projects_write,push_files,
-        repository_ruleset_read,search_code,search_commits,search_orgs,
+        repository_ruleset_read,search_commits,search_orgs,
         search_repositories,search_users,star_repository,sub_issue_write,
         unstar_repository,update_gist,update_pull_request
     tools:
@@ -85,11 +85,14 @@ mcp_servers:
       # get_review_comments/get_comments/get_check_runs). search_pull_requests
       # covers milestone:/review-requested:/label: query syntax, which is how
       # "requested reviewer" filtering and milestone/release-urgency reasoning
-      # both work — there's no separate milestone-listing tool.
+      # both work — there's no separate milestone-listing tool, and no
+      # list_pull_requests either: search_pull_requests's query syntax covers
+      # every case this profile needs, so the plain list tool isn't granted.
       #
       # Related-issue reads — issue_read's 'get' method returns
-      # closed_by_pull_requests, the real signal for "which PR closes which
-      # issue" rather than guessing from text.
+      # closed_by_pull_requests (skills/pr-queue uses this for "explain PR
+      # #N"); search_issues finds related discussion. No list_issues either,
+      # same reasoning as list_pull_requests above.
       #
       # Label taxonomy + CODEOWNERS — read live, never hardcoded (see
       # skills/kyverno-context). get_team_members/get_teams resolve
@@ -97,22 +100,24 @@ mcp_servers:
       #
       # Risk enrichment for queue reasoning — read-only.
       #
+      # search_code — repo-wide text search: blast-radius approximation and
+      # on-demand doc discovery (AGENTS.md etc.), no code-graph MCP needed.
+      #
       # Actions using the maintainer's own token — label, comment, review,
       # rebase, and requesting a Copilot review if one's missing. issue_write
       # is broader than "just labels" (can also touch state/assignees/
       # milestone) — SOUL.md/pr-actions instruct the agent to only ever pass
       # `labels` on it.
       include:
-        - list_pull_requests
         - search_pull_requests
         - pull_request_read
         - issue_read
-        - list_issues
         - search_issues
         - list_label
         - get_label
         - get_file_contents
         - get_repository_tree
+        - search_code
         - get_team_members
         - get_teams
         - list_releases

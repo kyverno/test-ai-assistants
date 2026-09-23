@@ -150,6 +150,35 @@ will be wrong the moment it points at a real repo instead of the sandbox one. So
 `CODEOWNERS`) against whatever `KYVERNO_REPO` is configured to, and caches the
 result — it never assumes it already knows a repo's conventions.
 
+## Maintainer questions are open-ended — skills aren't scripts
+
+A maintainer can ask this agent anything about the queue's state, not just
+the fixed set of actions listed above. `pr-queue`/`pr-actions` should not be
+written as a fixed procedure per anticipated question (that list is
+unbounded) — they should give the agent the right tools, the fixed facts
+that don't change per-question (codegen fan-out, CI split), and one
+generalizing instinct: when something about the repo's own state or
+conventions is unknown, go look and cite it, don't guess. This is the same
+principle as "labels and CODEOWNERS are never hardcoded" above, just
+extended past labels/CODEOWNERS to repo docs and arbitrary questions.
+
+Concretely: `kyverno/kyverno` already has whatever docs it has (`AGENTS.md`,
+`CONTRIBUTING.md`, `docs/**`, ...) — nothing needs authoring. `search_code`
+(`config.yaml`'s `mcp_servers.github.tools.include`) finds and reads them on
+demand, scoped to what a specific question needs, rather than eagerly
+preloading every doc every session. `search_code` is not automatically
+scoped to `KYVERNO_REPO` — it searches all of GitHub unless the query
+includes `repo:${KYVERNO_REPO}`; every skill using it must include that
+qualifier explicitly.
+
+`search_code` also approximates blast-radius reasoning ("what calls this,
+what would this break") via text search — weaker than a real call graph
+(misses interface-based indirection in Go), but needs no new
+infrastructure. A dedicated code-graph MCP server is a plausible v2 addition
+if real maintainer use shows text search isn't enough, but per the
+validation plan below, that's a decision for after v1 is used for real —
+not before.
+
 ## `config.yaml`
 
 The toolset is a hand-picked allowlist, not the raw GitHub/Slack MCP toolsets:
