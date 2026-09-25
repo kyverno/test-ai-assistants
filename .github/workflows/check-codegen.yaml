@@ -1,0 +1,13 @@
+# Test fixture: mirrors kyverno/kyverno's real pre-merge codegen gate name
+# (see skills/kyverno-context/SKILL.md) so PR CI status queries match a real
+# workflow. No real codegen runs here.
+name: check-codegen
+on:
+  pull_request:
+    paths:
+      - "api/**"
+jobs:
+  check-codegen:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "test fixture — no real codegen check"

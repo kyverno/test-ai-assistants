@@ -1,0 +1,13 @@
+# Test fixture: mirrors kyverno/kyverno's real post-merge-only test gate
+# name (see skills/kyverno-context/SKILL.md) — push-to-main only, never on
+# pull_request, so it exercises the "nothing catches this before merge"
+# reasoning for real. No real conformance/k6 suite runs here.
+name: check-tests
+on:
+  push:
+    branches: [main]
+jobs:
+  post-merge-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "test fixture — no real post-merge suite"
