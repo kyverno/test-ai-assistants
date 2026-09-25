@@ -34,7 +34,7 @@ that skill's knowledge is assumed available, not re-derived here.
   `get_dependabot_alert`, `list_secret_scanning_alerts`,
   `get_secret_scanning_alert`, `actions_list`, `actions_get`,
   `get_job_logs`, `request_copilot_review`.
-- `mcp-slack` tools: `conversations_history`.
+- `mcp-slack` tools: `conversations_history`, `conversations_add_message`.
 - Env: `KYVERNO_REPO`, `MAINTAINER_GITHUB_LOGIN`, `SLACK_HOME_CHANNEL`.
 
 ## Quick Reference
@@ -58,6 +58,12 @@ that skill's knowledge is assumed available, not re-derived here.
   urgency signal alongside milestone due dates.
 - `conversations_history(channel_id=SLACK_HOME_CHANNEL)` — priority
   signals mentioning the bot or a specific PR.
+- `conversations_add_message(channel_id=SLACK_HOME_CHANNEL, ...)` — post
+  the queue into the channel when asked to ("share this with the channel",
+  "post the queue"). Hermes' own Slack platform already handles replying
+  in the conversation the maintainer is chatting in — this tool is only
+  for the distinct case of posting into `SLACK_HOME_CHANNEL` on request,
+  including when the maintainer asked via CLI, not Slack.
 - `actions_list(method="list_workflow_runs")` / `actions_get` /
   `get_job_logs` on the repo's push-triggered post-merge workflow — to
   corroborate a *reported* post-merge break with real run data. On demand

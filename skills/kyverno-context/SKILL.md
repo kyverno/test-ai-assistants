@@ -116,9 +116,9 @@ just whether its own pre-merge checks are green.
   `get_file_contents` on `Makefile` / `.github/workflows/check-tests.yaml`
   rather than trusting this file blindly.
 - There's no dedicated milestone-listing tool in `github-mcp-server` —
-  milestone data comes from fields on `list_pull_requests`/
-  `search_pull_requests` results, which `pr-queue` reads directly; this
-  skill doesn't handle milestones.
+  milestone data comes from fields on `search_pull_requests` results and
+  its `milestone:"name"` query qualifier, which `pr-queue` reads directly;
+  this skill doesn't handle milestones.
 - Don't preload every repo doc every session — `search_code` on demand,
   scoped to the current question, not eagerly.
 
