@@ -6,12 +6,18 @@ up, no webhook receiver, no GitHub App to register. Install flow only.
 ## Install
 
 ```bash
-hermes profile install github.com/kyverno/kyverno-assistant --alias kyverno
+hermes profile install github.com/kyverno/kyverno-assistant --name kyverno --alias -y
 ```
+
+`--alias` takes no value — it creates a shell wrapper command named after
+`--name` (or the manifest's own name if `--name` is omitted). `--alias
+kyverno` is a common-looking but wrong invocation; it parses `kyverno` as a
+second, unexpected positional argument and fails with "unrecognized
+arguments."
 
 (While this is still prototyped in this sandbox repo rather than published
 separately, install from a local checkout instead: `hermes profile install .
---alias kyverno`.)
+--name kyverno --alias -y`.)
 
 This prompts for the env vars listed in `distribution.yaml`'s `env_requires` and
 writes them to the installed profile's `.env` (`~/.hermes/profiles/kyverno/.env`

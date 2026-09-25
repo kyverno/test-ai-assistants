@@ -1,0 +1,6 @@
+# Test fixture, not a real ownership policy — see docs/capabilities.md.
+# Three specificity levels on purpose, to exercise last-match-wins:
+# a broad wildcard, a directory override, and a narrower override after it.
+*                    @suhaani-agarwal
+/skills              @kyverno-test-fake-owner
+/skills/pr-actions   @suhaani-agarwal
