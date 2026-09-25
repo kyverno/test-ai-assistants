@@ -65,5 +65,7 @@ independent, verified layers. See `docs/architecture.md`.
   all via the maintainer's own token; explicit about what it can't do
   (merge, true rebase, post-merge CI monitoring) and why.
 - `docs/architecture.md` / `docs/deployment.md` — design and install runbook.
+- `docs/capabilities.md` — what it can actually do, written from a real
+  session, not the design intent.
 - `docs/archive/` — operational notes from the abandoned `kyctrl` design
   this repo previously held (kept for reference, not part of this project).
