@@ -100,13 +100,8 @@ confirm the queue reasoning (stacked PRs, generated-file conflicts, post-merge
 CI risk) matches what they'd conclude by hand. Only after that is v2 (merge,
 gated per the archived kyctrl pattern) worth building.
 
-`skills/` is written (three skills — see README), and a real `hermes profile
-install .` has been run and re-verified multiple times against this repo,
-most recently with a real, fully-scoped Slack bot token: `hermes mcp list`
-shows both `github` (30 tools) and `slack` (2 tools) enabled and matching
-`config.yaml` exactly, `hermes mcp test github`/`hermes mcp test slack` both
-connect live, and `hermes hooks doctor` reports the safety hook healthy.
-Re-run these three whenever `config.yaml` changes:
+`skills/` is written (four skills — see README). After installing, check
+the toolset matches `config.yaml`:
 
 ```bash
 hermes mcp list

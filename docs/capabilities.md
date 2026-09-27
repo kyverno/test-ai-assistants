@@ -95,6 +95,21 @@ number/title/URL — and names the window it checked, so "not found" reads as
 turns up, it can draft a reply and post it into that same thread once you
 confirm.
 
+## GitHub Discussions
+
+> **You:** anything new in Discussions I should look at?
+
+Lists open discussions, checked individually for actual state (there's no
+open/closed filter on the listing itself) rather than assuming every result
+is still active.
+
+> **You:** answer the discussion asking about X
+
+Reads the whole thread first, cross-references the codebase if the
+question needs it (citing what it found, not guessing), then drafts a
+reply and shows it to you — posting only once you confirm, since a
+discussion answer is visible to the whole community, not just you.
+
 ## A standing review digest, without asking every time
 
 A scheduled job ships with the profile (`cron/jobs.json`) — weekday

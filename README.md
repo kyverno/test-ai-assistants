@@ -179,6 +179,9 @@ independent layers. See `docs/architecture.md`.
 - `skills/pr-actions/` — label/comment/request-changes/approve/branch-update,
   all via the maintainer's own token; explicit about what it can't do
   (merge, true rebase, post-merge CI monitoring) and why.
+- `skills/discussions/` — reads and answers GitHub Discussions; drafts a
+  reply and waits for confirmation before posting, since a discussion
+  answer is visible to the whole community, not just the maintainer.
 - `docs/architecture.md` / `docs/deployment.md` — design and install runbook.
 - `docs/capabilities.md` — a tour of what it can do, with example prompts.
 - `docs/test-scenarios.md` — the fake PR/issue/CODEOWNERS environment built
