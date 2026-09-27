@@ -14,7 +14,11 @@ Takes the actions a maintainer would take on a PR — using their own
 needs doing. Label, comment, request changes, approve, and catch a branch up
 with its base. Cannot merge: no merge tool exists in this profile's toolset
 (see `docs/architecture.md`) — if a task seems to need merging, say so and
-stop rather than looking for a workaround.
+stop rather than looking for a workaround. Same answer for committing or
+pushing a code change to a PR branch (e.g. a fix `pr-queue` proposed for a
+Dependabot `needs-review` PR): no file-write tool is granted either, so name
+that plainly and stop instead of improvising with a comment or a review
+body as a substitute for an actual commit.
 
 ## When to Use
 
@@ -120,6 +124,10 @@ author to resolve, not something to keep retrying.
 - Cannot re-trigger or detect post-merge CI (no polling in v1) — that's
   `pr-queue`'s conversational-input handling, not something this skill
   does.
+- Asked to commit or push a fix `pr-queue` proposed (e.g. for a Dependabot
+  `needs-review` PR): no file-write tool is granted, so say so and stop —
+  same handling as the merge case above, not a reason to post the fix as
+  a comment instead and call it done.
 
 ## Verification
 
@@ -130,3 +138,6 @@ author to resolve, not something to keep retrying.
   warning appears before the action runs, not only after.
 - Ask this skill to merge a PR and confirm it declines and names the
   reason (no tool for it) rather than attempting a workaround.
+- Ask this skill to commit a fix to a Dependabot PR and confirm it
+  declines and names the reason (no file-write tool granted) rather than
+  substituting a comment or attempting any other tool.

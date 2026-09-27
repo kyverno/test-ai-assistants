@@ -161,13 +161,15 @@ mcp_servers:
       # Setting this to a channel ID (rather than 'true') enables posting
       # only in that one channel, not the whole workspace.
       SLACK_MCP_ADD_MESSAGE_TOOL: "${SLACK_HOME_CHANNEL}"
-      # Do NOT list conversations_add_message here too: per this server's
-      # own docs, listing a write tool in SLACK_MCP_ENABLED_TOOLS enables it
-      # "without channel restrictions" — that would silently undo the
-      # SLACK_MCP_ADD_MESSAGE_TOOL channel scoping above. Leave write tools
-      # to their dedicated env var; use this one only to narrow the
-      # always-on read tools down to what's actually needed.
-      SLACK_MCP_ENABLED_TOOLS: "conversations_history"
+      # Verified against the real server's source (pkg/handler/conversations.go):
+      # the channel restriction above is enforced independently, at call time,
+      # by reading SLACK_MCP_ADD_MESSAGE_TOOL directly — "without channel
+      # restrictions" only happens if that var is ALSO empty, which it never is
+      # here. conversations_add_message must still be listed below too, or the
+      # server's own tool-registration gating (a separate check) never
+      # registers it at all — confirmed live: omitting it left only 1 of 2
+      # tools discovered.
+      SLACK_MCP_ENABLED_TOOLS: "conversations_history,conversations_add_message"
     tools:
       # Read the maintainers channel for priority signals, reply there.
       include:

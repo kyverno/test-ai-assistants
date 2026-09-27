@@ -1,117 +1,163 @@
-# What kyverno-assistant can actually do right now
+# What kyverno-assistant can do
 
-Written after the first live, working `kyverno chat` session against the
-real `kyverno/test-ai-assistants` repo. Everything below reflects what the
-three shipped skills (`kyverno-context`, `pr-queue`, `pr-actions`) and the
-32-tool allowlist (`config.yaml`) actually enable — not the aspirational
-design. See `docs/architecture.md` for why it's built this way.
+A tour of the three skills (`kyverno-context`, `pr-queue`, `pr-actions`) with
+real example prompts. Everything shown here maps directly to a skill's
+actual procedure — see the linked `skills/*/SKILL.md` for the full
+tool-by-tool detail behind each example.
 
-## 1. Understanding the repo — `kyverno-context`
+## Building a merge-sequence recommendation
 
-- Looks up the repo's **actual current labels** before ever filtering or
-  applying one — never assumes a label like "ready-for-review" exists.
-- Resolves **CODEOWNERS live**, including expanding `@org/team` entries to
-  check whether the maintainer is actually a member — not just parsing the
-  file text.
-- Knows two fixed, pre-researched facts about `kyverno/kyverno`'s build:
-  which paths (`api/**`) fan out to generated files, and which test suites
-  only run post-merge (never on a PR) — this is what lets the queue reason
-  about risk a green checkmark won't show.
-- Can find and read any doc in the repo on demand (`AGENTS.md`,
-  `CONTRIBUTING.md`, anything under `docs/`) via repo-wide code search,
-  scoped to whatever the current question needs — not preloaded.
+> **You:** build the merge sequence
 
-## 2. Building and explaining the review queue — `pr-queue`
+It fetches every open PR carrying `ready-for-review` or `needs-review`
+(human and Dependabot together), classifies their changed files
+(generated/interface/test-only), builds a conflict graph, and returns one
+ordered list — not a bare sort:
 
-Ask **"what's my review queue"** and it will:
+> 1. **#4181** — closes the active milestone's tracked issue directly.
+> 2. **#4176** — stacked on #4181 (base branch is #4181's head); must land
+>    after it regardless of anything else.
+> 3. **#4190** — touches `api/kyverno/v2/*_types.go`; ordered ahead of
+>    #4188 below since it's the codegen-input side of a generated-file
+>    conflict.
+> 4. **#4188** — conflicts with #4190 on `zz_generated.deepcopy.go`;
+>    sequenced after it for that reason.
+> 5. **#4172** (Dependabot, `needs-review`) — Copilot's review requested a
+>    changelog note; not a CI failure or conflict.
+> 6. **#4165** (Dependabot, `major-bump`, `needs-review`) — bumps
+>    `github.com/go-logr/logr` v1→v2; `search_code` finds 6 real call sites
+>    in `pkg/logging` and `pkg/webhooks` that would need review, cited by
+>    file and line, plus the dependency's own release notes for what
+>    actually changed.
 
-- Fetch every open PR where you're a requested reviewer (including via
-  team, not just direct requests).
-- Filter to ready-for-review using the repo's real labels.
-- Flag, explicitly and by name:
-  - **Stacked PRs** — one PR's base branch is another queued PR's head.
-  - **Generated-file conflicts** — two PRs both touch codegen inputs, so
-    they'll conflict on generated files even if their own diffs don't.
-  - **Package overlap** — same package touched without a git conflict, but
-    still elevated review risk.
-  - **Post-merge CI risk** — which PRs touch code paths only the
-    post-merge-only suites would catch a problem in.
-- Give every PR a one-line, citable reason for its position — not a bare
-  sorted list.
+Every position carries its reason inline. A cycle (two PRs each needing
+the other to land first) gets named explicitly and handed back to you
+rather than guessed at.
 
-Ask about **a specific PR** and it will:
+## Explaining a specific PR
 
-- Explain it (diff, reviews, CI status, comments).
-- Read and synthesize existing Copilot/CodeRabbit review output — and say
-  plainly if neither has reviewed it yet, rather than implying a clean
-  check happened. Can request a Copilot review if one's missing.
-- Check whether the PR closes an issue, and whether another PR is also
-  configured to close the same one (duplicate-effort signal).
+> **You:** explain PR #4181
 
-Ask **"is anything else related to this"** and it searches issues/PRs for
-mentions that aren't formally linked, citing what it actually found.
+Short by default — what it changes (plain language, not a diff dump), the
+issue it closes, and Copilot/CodeRabbit's existing verdicts, synthesized
+per their actual division of labor (CodeRabbit: security/lint/codegen
+freshness; Copilot: logic/architecture/cross-file impact).
 
-Tell it **"CI broke on main"** and it will look up the real failing run and
-cross-reference it against the current queue by file overlap — it doesn't
-poll or watch for this on its own; it only reasons about it when told.
+> **You:** explain PR #4181, and check if anything's risky or being
+> discussed in Slack
 
-Ask it to **post the queue to the maintainers' Slack channel** and it can,
-separately from replying to you directly.
+Same brief, plus: which review threads are still unresolved and who owes a
+response, post-merge risk (does it touch `pkg/engine`/`pkg/cel`/other
+surface only the post-merge suites exercise, and is an `e2e-failure` issue
+currently open for the target branch), a suggested action (approve /
+request changes / wait on CI / needs author to resolve threads), and
+whatever the maintainers' Slack channel says about it in the window
+checked — cited by message, not a bare "yes/no."
 
-## 3. Taking action — `pr-actions`
+## Dependabot and duplicate-effort checks
 
-Once you decide what to do, it can, using your own GitHub credentials:
+> **You:** does #4172 need anything from me right now?
 
-- **Label** a PR — only with labels that actually exist on the repo.
-- **Comment**, or edit an existing comment instead of duplicating one.
-- **Review**: approve, request changes, or comment — including
-  line-specific feedback and replying to an existing review thread (e.g.
-  answering a Copilot comment).
-- **Catch a branch up with its base** when you say "rebase this" — it will
-  do this, but tells you honestly that it's a merge-update, not a real
-  rebase (GitHub's API doesn't offer a true rebase), and warns you up front
-  if the PR touches codegen inputs, since updating the branch won't
-  regenerate stale generated files.
+Reads Copilot's actual review body and the failing check names rather than
+reporting the bare `needs-review` label — e.g. "Copilot flagged the
+changelog entry as missing" or "the `Go vet` check is failing," never a
+generic "not approved yet."
 
-It will **not**:
+> **You:** explain #4190
 
-- **Merge, ever.** No merge tool exists anywhere in its toolset. This isn't
-  a rule it follows — the capability doesn't exist to invoke, enforced in
-  three independent layers (server-side exclusion, Hermes-side allowlist, a
-  hook backstop), each verified against the real running services, not
-  assumed from documentation.
-- Do a **true git rebase** (rewrite commit history) — no tool for it exists
-  on purpose; that would need local git plus a force-push, which is
-  deliberately excluded.
-- **Watch for or auto-detect** anything — no webhook, no polling. It only
-  acts when asked.
+If another open PR is also configured to close the same issue, it says so —
+`closed_by_pull_requests` surfaces duplicate effort before you spend a
+review on either one without knowing.
 
-## How it actually works, briefly
+## Cross-referencing and CI breaks
 
-- A single maintainer installs it as a **Hermes profile** and talks to it
-  on the CLI or Slack — there's no server, no webhook receiver, nothing
-  running when nobody's asking it anything.
-- It uses **your own GitHub token**, scoped read + limited write (no merge,
-  no admin, no Contents-write) — every action it takes is attributable to
-  you, not an anonymous bot.
-- It **never hardcodes** repo conventions (labels, CODEOWNERS, docs) —
-  every skill re-resolves them live, every session, because they drift and
-  because the same profile may later point at a different repo.
-- It's built to **look things up rather than guess** on open-ended
-  questions, not to follow a fixed script per anticipated question — see
-  "Maintainer questions are open-ended" in `docs/architecture.md`.
+> **You:** is anything else related to #4181?
 
-## Honest current limits
+Searches issues and PRs for mentions that aren't formally linked, and says
+plainly when it finds nothing rather than fabricating a connection.
 
-- **One repo, one maintainer, per installed instance.** Not a fleet, not
-  multi-tenant.
-- **No blast-radius / call-graph analysis** — it approximates "what would
-  this break" with text search (`search_code`), which is weaker than a
-  real code-graph tool but needs no extra infrastructure. See
-  `docs/architecture.md` for why that tradeoff was made deliberately.
-- **Slack integration is two separate pieces** (the chat interface and the
-  channel-reading/posting tool) — see `docs/architecture.md` if one works
-  and the other doesn't.
-- **Not validated against real maintainer workflows yet** — this is one
-  person's first live session, not the 2-3-maintainer validation pass
-  `docs/deployment.md` calls for before anything past v1.
+> **You:** CI broke on main, what's affected?
+
+Looks up the actual failing workflow run and names which currently-open PRs
+overlap it by file path — not "some PRs might be affected."
+
+## Slack
+
+> **You:** post the merge sequence to the maintainers channel
+
+Drafts the message, shows it to you, posts only once you confirm.
+
+> **You:** did anyone already ask about #4172 in Slack?
+
+Scans a bounded window of channel history and text-matches against the PR
+number/title/URL — and names the window it checked, so "not found" reads as
+"not in the last N days," not "never discussed." If a PTAL-shaped thread
+turns up, it can draft a reply and post it into that same thread once you
+confirm.
+
+## A standing review digest, without asking every time
+
+A scheduled job ships with the profile (`cron/jobs.json`) — weekday
+mornings, it builds the merge sequence and posts a short digest to your
+Slack channel on its own: what's new since the last digest, and the
+current review order. It arrives paused; `hermes cron resume
+kyverno-review-digest` turns it on, and `hermes cron edit
+kyverno-review-digest --schedule "..."` changes the timing. Each run
+remembers its own last output, so the digest says what changed rather than
+repeating the whole list every morning.
+
+## Taking action, with your own credentials
+
+> **You:** label #4172 as `kind/dependency`
+
+Checks the repo's real current label set first — never invents or assumes
+a name exists.
+
+> **You:** approve #4188
+
+Confirms current PR state before acting, then reports back specifically
+what happened and to which PR.
+
+> **You:** rebase #4190
+
+Brings the branch up to date with its base — and says plainly that this is
+a merge-update, not a true git rebase (GitHub's API doesn't offer one),
+warning up front that the PR touches codegen inputs so the update alone
+won't regenerate now-stale generated files.
+
+## Boundaries, by design
+
+- **Never merges anything.** No merge tool exists in its toolset at all —
+  enforced in three independent layers (server-side exclusion, an allowlist,
+  a hook backstop), not a rule it simply follows.
+- **Never does a true git rebase** (no history rewriting) — a merge-update
+  via the GitHub API is the closest available action, and it says so.
+- **Never commits or pushes code** — including a fix it just diagnosed and
+  described for you. It will describe the fix and ask; a human applies it.
+- **Never polls or watches for events** — no webhook, no "check every N
+  minutes for a change." The one scheduled thing it does (the review
+  digest above) runs on a fixed clock and only ever posts a digest;
+  everything else — CI status, Slack mentions, post-merge risk — is
+  checked because you asked in that turn.
+- **One repo, one maintainer per installed instance** — point a separate
+  install at each repo/maintainer pair rather than one instance serving many.
+
+## How it works, briefly
+
+- Installs as a **Hermes profile**; you talk to it on the CLI or in Slack.
+  No server to run, no webhook receiver — nothing runs when nobody's asking
+  it anything (aside from Hermes' own gateway process, which just listens
+  for messages).
+- Uses **your own GitHub token**, scoped read plus limited write — every
+  action it takes is attributable to you.
+- **Never hardcodes** repo conventions — labels and CODEOWNERS are
+  re-resolved live every session, because they drift and because the same
+  profile may point at a different repo later.
+- Approximates "what would this break" via repo-wide text search rather
+  than a real call graph — no extra infrastructure to run, and catches the
+  large majority of real conflicts in practice (file-overlap plus
+  generated/interface classification).
+- The Slack chat interface (mentions/DMs) and the Slack *tool* (reading and
+  posting to the maintainers channel) are two independent integrations that
+  happen to share a bot token — see `docs/architecture.md` if you're
+  debugging one without the other.

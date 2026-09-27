@@ -24,9 +24,12 @@ writes them to the installed profile's `.env` (`~/.hermes/profiles/kyverno/.env`
 — separate from this repo, never committed):
 
 - `GITHUB_TOKEN` — fine-grained PAT: Contents Read, Pull requests Read & Write,
-  Issues Read, Checks Read. Do **not** grant Contents Write or any merge/admin
-  scope — the toolset doesn't call a merge endpoint, but the token shouldn't be
-  able to either (belt and suspenders, see `docs/architecture.md`).
+  Issues Read & Write, Checks Read, Code scanning alerts Read, Dependabot
+  alerts Read, Secret scanning alerts Read, org Members Read (the last one
+  for CODEOWNERS team resolution). Do **not** grant Contents Write or any
+  merge/admin scope — the toolset doesn't call a merge endpoint, but the
+  token shouldn't be able to either (belt and suspenders, see
+  `docs/architecture.md`).
 - `MAINTAINER_GITHUB_LOGIN` — the installing maintainer's GitHub username.
 - `SLACK_BOT_TOKEN` (`xoxb-*`) / `SLACK_APP_TOKEN` (`xapp-*`, Socket Mode) — the
   Slack app's bot and app-level tokens. **Two different things use these** (see
@@ -35,11 +38,16 @@ writes them to the installed profile's `.env` (`~/.hermes/profiles/kyverno/.env`
   `app_mentions:read` + `message.channels` event subscriptions; the `slack`
   MCP server (reading/posting `SLACK_HOME_CHANNEL`) only ever uses
   `SLACK_BOT_TOKEN`, never `SLACK_APP_TOKEN`. Scopes needed either way:
-  `chat:write`, `channels:history`, `channels:read`, `app_mentions:read`.
-  Reinstall the app after subscribing to events. Note: the `slack` MCP
-  server validates its token at process startup and exits immediately on an
-  invalid one — a wrong/expired `SLACK_BOT_TOKEN` means that container never
-  starts, not that it starts with reduced capability.
+  `chat:write`, `channels:history`, `channels:read`, `app_mentions:read`,
+  plus `groups:read`, `mpim:read`, `im:read` — the `slack` MCP server fetches
+  all four Slack channel types in one call at boot regardless of what this
+  profile uses, and fatally exits if any one scope is missing, even though
+  this profile only ever reads one public channel. Confirmed by running the
+  real container. Reinstall the app after subscribing to events or changing
+  scopes. Note: the `slack` MCP server validates its token at process
+  startup and exits immediately on an invalid one — a wrong/expired
+  `SLACK_BOT_TOKEN` means that container never starts, not that it starts
+  with reduced capability.
 - `SLACK_ALLOWED_USERS` — the installing maintainer's Slack member ID (keeps
   this instance answering only them).
 - `SLACK_HOME_CHANNEL` — the maintainers channel to read priority signals from
@@ -56,7 +64,24 @@ writes them to the installed profile's `.env` (`~/.hermes/profiles/kyverno/.env`
 kyverno chat
 ```
 
-or talk to it in the configured Slack channel.
+Talking to it on Slack needs one more thing `kyverno chat` doesn't cover:
+Hermes runs exactly one gateway *per host* (not per profile) as the inbound
+process for every profile's messaging platforms — `kyverno chat` only starts
+a foreground CLI session, it doesn't make the gateway listen for Slack
+mentions. Install the host gateway once, from the `default` profile (it
+serves every profile, including this one):
+
+```bash
+hermes profile use default
+hermes gateway install
+hermes gateway status   # confirm it's supervised and running
+```
+
+Confirmed live: `~/.hermes/logs/gateway.log` should show `slack connected
+(profile: kyverno)`. A per-profile `hermes gateway run`/`install` fails on
+purpose (`exited with code 78`) once a host gateway exists — that's not a
+bug, it's the double-bind guard (two pollers on one bot token, port
+conflicts).
 
 ## Update
 
@@ -75,12 +100,22 @@ confirm the queue reasoning (stacked PRs, generated-file conflicts, post-merge
 CI risk) matches what they'd conclude by hand. Only after that is v2 (merge,
 gated per the archived kyctrl pattern) worth building.
 
-Before any of that: `skills/` still needs writing (see README status note),
-and a real `hermes profile install .` has never been run against this repo.
-When it is, confirm the registered toolset matches `docs/architecture.md`'s
-"How the toolset allowlist is actually verified" section — the GitHub side of
-that check can be repeated without any credentials by running the real
-container and diffing its tool list:
+`skills/` is written (three skills — see README), and a real `hermes profile
+install .` has been run and re-verified multiple times against this repo,
+most recently with a real, fully-scoped Slack bot token: `hermes mcp list`
+shows both `github` (30 tools) and `slack` (2 tools) enabled and matching
+`config.yaml` exactly, `hermes mcp test github`/`hermes mcp test slack` both
+connect live, and `hermes hooks doctor` reports the safety hook healthy.
+Re-run these three whenever `config.yaml` changes:
+
+```bash
+hermes mcp list
+hermes mcp test github
+hermes mcp test slack
+```
+
+The GitHub side can also be checked credential-free by running the real
+container directly and diffing its tool list:
 
 ```bash
 docker run -i --rm \
@@ -91,6 +126,7 @@ docker run -i --rm \
 # against mcp_servers.github.tools.include in config.yaml.
 ```
 
-The Slack side needs a real `SLACK_MCP_XOXB_TOKEN` first — the server exits
-before the MCP handshake on an invalid one (see above), so this can't be
-checked credential-free the way GitHub's can.
+The Slack side can't be checked credential-free the same way — the server
+exits before the MCP handshake on an invalid or missing token (see above) —
+but a real token, once obtained, is enough to run `hermes mcp test slack`
+directly; no separate manual container probe is needed the way it once was.

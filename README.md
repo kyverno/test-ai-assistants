@@ -7,34 +7,146 @@ Slack MCP servers directly — no separate `mcp.json`) + `skills/` + `hooks/`.
 One maintainer installs it, fills in their own credentials, and talks to it on
 Slack or via `kyverno chat` — no server to run, no webhook receiver.
 
-**Status: skills written, not yet installed anywhere.** `distribution.yaml` /
-`SOUL.md` / `config.yaml` / `hooks/` and all three skills (`kyverno-context`,
-`pr-queue`, `pr-actions`) exist and are internally consistent — every tool
-each skill references is actually granted in `config.yaml`, and vice versa
-(cross-checked, not assumed). What's still missing: a real `hermes profile
-install` has never been run against this repo, so none of it has executed
-inside an actual Hermes process, and the validation-with-2-3-maintainers step
-(`docs/deployment.md`) hasn't started. Before graduating to a dedicated
-`kyverno/kyverno-assistant` repo, both of those still need to happen.
+**Status:** works today — install it and use it. Not yet validated across
+multiple real maintainers' workflows (`docs/deployment.md`'s validation
+plan), which is the bar for graduating to a dedicated
+`kyverno/kyverno-assistant` repo.
 
-## Quick start
+## Setup, from scratch
+
+### 1. Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/), running — the GitHub and
+  Slack tools each run as their own container, no separate install.
+- The [Hermes CLI](https://hermes-agent.nousresearch.com) on your `PATH`.
+- An Anthropic API key (or any provider Hermes supports).
+
+### 2. Clone this repo
 
 ```bash
-hermes profile install . --name kyverno --alias -y   # local checkout, while prototyping
+git clone https://github.com/kyverno/test-ai-assistants.git
+cd test-ai-assistants
+```
+
+(This assistant is prototyped in this sandbox repo rather than a dedicated
+one for now — see the Status note above. Install from the local checkout,
+as below, not from a git URL.)
+
+### 3. Get a GitHub token
+
+A fine-grained personal access token, scoped to the repo you'll point this
+at (`kyverno/kyverno` for real use, or `kyverno/test-ai-assistants` to try
+the sandbox scenarios first): Contents Read, Pull requests Read & Write,
+Issues Read & Write, Checks Read, Code scanning alerts Read, Dependabot
+alerts Read, Secret scanning alerts Read, org Members Read. No Contents
+Write and no merge/admin scope — see `docs/architecture.md` for the full
+reasoning.
+
+### 4. Set up Slack (optional — skip for CLI-only use)
+
+Two separate things share one Slack app here: the **bot** you `@mention` or
+DM to talk to the assistant conversationally, and a **tool** the assistant
+calls on its own to read the maintainers channel's history and post into
+it (e.g. the merge sequence, or a reply in a PTAL thread). Both need to live
+in the **same Slack workspace** as each other and as the maintainers
+channel you want it reading/posting to — a bot installed in one workspace
+can't see or act on a channel in a different one.
+
+1. [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** →
+   **From scratch**. Name it, pick your workspace.
+2. **OAuth & Permissions** → add Bot Token Scopes: `chat:write`,
+   `channels:history`, `channels:read`, `app_mentions:read`, `groups:read`,
+   `mpim:read`, `im:read`. (The last three are needed even though this
+   assistant only reads one public channel — the Slack tool fetches every
+   channel type in one call at startup and needs a scope for each.)
+3. **Socket Mode** → turn it on → generate an App-Level Token with the
+   `connections:write` scope. Save it.
+4. **Event Subscriptions** → turn it on → subscribe to bot events:
+   `app_mention`, `message.channels`.
+5. **Install App** (to your workspace) → copy the **Bot User OAuth Token**.
+6. Invite the bot to your maintainers channel (`/invite @<bot-name>`), then
+   grab that channel's ID and your own Slack member ID (both from the
+   **...** / channel-details menus in Slack).
+7. If you add or change scopes after installing, click **reinstall your
+   app** on the OAuth & Permissions page — scope changes need that to take
+   effect.
+
+### 5. Install the profile
+
+```bash
+hermes profile install . --name kyverno --alias -y
+```
+
+This prompts for every env var `distribution.yaml` requires and writes them
+to `~/.hermes/profiles/kyverno/.env`: your GitHub token,
+`MAINTAINER_GITHUB_LOGIN` (your GitHub username), `KYVERNO_REPO`
+(`owner/repo`), your Anthropic key, and — if you did step 4 — the four
+Slack values. Full detail on each var: `docs/deployment.md`.
+
+### 6. Start the messaging gateway (Slack only)
+
+Talking to the bot in Slack needs Hermes' gateway process running —
+`kyverno chat` alone doesn't start it. Hermes runs one gateway per machine,
+shared across every profile, installed from the `default` profile:
+
+```bash
+hermes profile use default
+hermes gateway install
+hermes gateway status
+```
+
+`tail ~/.hermes/logs/gateway.log` should show a line naming your profile
+connected to Slack.
+
+### 7. Sanity-check the toolset
+
+```bash
+hermes profile use kyverno
+hermes mcp list          # github and slack should both show "enabled"
+hermes mcp test github
+hermes mcp test slack    # only if you set up Slack
+hermes hooks doctor
+```
+
+### 8. Run it
+
+```bash
 kyverno chat
 ```
 
-See `docs/deployment.md` for the full env var list and Slack app setup.
+or mention the bot in the Slack channel you invited it to.
 
-## What it does (v1, written but not yet run for real)
+### 9. Turn on the review digest (optional)
 
-Fetches PRs where the maintainer is a requested reviewer (`pr-queue`),
-filters to ready-for-review using this repo's actual live label set — never
-a hardcoded name (`kyverno-context`) — and produces a ranked queue that
-explains itself: stacked-PR ordering, generated-file conflicts between
-queued PRs, and per-PR post-merge CI risk (`docs/architecture.md` covers why
-that last one matters specifically on this codebase). Explains any PR on
-request, synthesizing Copilot/CodeRabbit review output, and can also answer
+A scheduled job ships with the profile — a weekday-morning merge-sequence
+digest posted to your Slack channel — but arrives paused, since a
+distribution shouldn't post to your Slack on a schedule without you looking
+first:
+
+```bash
+hermes cron list      # see it: "kyverno-review-digest", paused
+hermes cron resume kyverno-review-digest
+```
+
+Want a different time or channel? `hermes cron edit kyverno-review-digest`.
+
+`docs/capabilities.md` has a full tour with example prompts.
+`docs/test-scenarios.md` has a ready-made set of test PRs/issues on
+`kyverno/test-ai-assistants` if you want to try it before pointing it at
+`kyverno/kyverno`.
+
+## What it does
+
+Fetches every open PR carrying a readiness label (never a hardcoded name —
+`kyverno-context` resolves the real label set live) and builds one ranked
+merge-sequence recommendation: stacked-PR ordering, generated-file
+conflicts, package overlap, milestone-alignment, and per-PR post-merge CI
+risk, human and Dependabot PRs together (`pr-queue`). Diagnoses a
+Dependabot PR's actual blocker instead of reporting a bare label, and gives
+a major-version bump real blast-radius via real call sites and the
+dependency's own release notes. Explains any PR on request — short by
+default, deeper (review threads, risk, a suggested action, Slack context)
+on request — synthesizing Copilot/CodeRabbit review output, and answers
 open-ended questions about the repo or queue by looking things up rather
 than guessing (`docs/architecture.md`, "Maintainer questions are
 open-ended"). Labels, comments, requests changes, approves, and catches a
@@ -43,7 +155,7 @@ credentials — note that's a GitHub-API merge-update, not a git rebase, even
 when a maintainer asks to "rebase"; see that skill for why.
 
 **Cannot merge** — no merge tool exists in its toolset, enforced in three
-independent, verified layers. See `docs/architecture.md`.
+independent layers. See `docs/architecture.md`.
 
 ## Layout
 
@@ -54,6 +166,9 @@ independent, verified layers. See `docs/architecture.md`.
   hand-edited only.
 - `hooks/block-dangerous-tools.sh` — a `pre_tool_call` backstop that rejects
   any merge/delete-repo/force-push-shaped tool call.
+- `cron/jobs.json` — scheduled jobs the distribution ships (currently: a
+  weekday review digest posted to Slack). Installed paused; the maintainer
+  reviews and resumes it (see Setup step 9).
 - `skills/kyverno-context/` — dynamically-resolved labels/CODEOWNERS
   (never hardcoded — re-resolved live every session) plus Kyverno's real
   codegen fan-out and pre-/post-merge CI split, and on-demand doc lookup
@@ -65,7 +180,11 @@ independent, verified layers. See `docs/architecture.md`.
   all via the maintainer's own token; explicit about what it can't do
   (merge, true rebase, post-merge CI monitoring) and why.
 - `docs/architecture.md` / `docs/deployment.md` — design and install runbook.
-- `docs/capabilities.md` — what it can actually do, written from a real
-  session, not the design intent.
+- `docs/capabilities.md` — a tour of what it can do, with example prompts.
+- `docs/test-scenarios.md` — the fake PR/issue/CODEOWNERS environment built
+  on this repo for exercising the skills against realistic-shaped data.
+- `docs/v2-plan.md` — the intelligent merge-sequencing plan for the next
+  phase: what's already built, what needs verifying before implementing,
+  and the phased build-out (written to be picked up cold in a new session).
 - `docs/archive/` — operational notes from the abandoned `kyctrl` design
   this repo previously held (kept for reference, not part of this project).
