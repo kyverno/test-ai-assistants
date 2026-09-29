@@ -35,6 +35,11 @@ that skill's knowledge is assumed available, not re-derived here.
   `get_secret_scanning_alert`, `actions_list`, `actions_get`,
   `get_job_logs`, `request_copilot_review`.
 - `mcp-slack` tools: `conversations_history`, `conversations_add_message`.
+- `mnemosyne_recall`/`mnemosyne_triple_query` (read) and
+  `mnemosyne_remember`/`mnemosyne_triple_add` (write) — see
+  `kyverno-context`'s "what this agent remembers, and where" reference for
+  the full vocabulary; this skill only calls into it at the specific points
+  below.
 - Env: `KYVERNO_REPO`, `MAINTAINER_GITHUB_LOGIN`, `SLACK_HOME_CHANNEL`.
 
 ## Quick Reference
@@ -133,7 +138,13 @@ that skill's knowledge is assumed available, not re-derived here.
      post-merge-only suites — a per-PR risk note, not a sequencing edge.
      Check whether an `e2e-failure` issue is already open for the target
      branch first; if so, say the whole queue is currently gated, don't
-     bury that inside one PR's note.
+     bury that inside one PR's note. Also `mnemosyne_triple_query` the
+     candidate's touched package-pairs for a `caused_e2e_failure` predicate
+     — an actual historical incident on this combination is a stronger,
+     more specific note than the generic post-merge-suite flag alone; cite
+     the incident (PR#, date) when one exists, and say plainly when the
+     query returns nothing rather than implying a clean history was checked
+     and confirmed.
 5. **Diagnose every `needs-review` entry** rather than reporting the bare
    label: read `get_reviews` for Copilot's verdict body, `get_check_runs`/
    `get_status` for failing checks, and `get`'s mergeable-state field for a
@@ -240,7 +251,10 @@ risk, a suggested action, and Slack context.
 7. Suggested action: one of approve / request changes / wait on CI / needs
    the author to resolve threads / proceed but flagged as high post-merge
    risk — derived from steps 3-5 above, stated with the reason, never a
-   bare verdict with no citation.
+   bare verdict with no citation. Before drafting, `mnemosyne_recall` for
+   durable notes on this PR's author (e.g. "needs multiple rounds on
+   generated-file changes") to calibrate tone/thoroughness — a real,
+   cited pattern, not a guess about the contributor.
 
 Completion criterion: every claim in the brief traces to a specific tool
 call made in this same turn, and the maintainer could tell from the answer
@@ -258,9 +272,12 @@ shapes are common enough to call out specifically:
 - **"Explain PR #N"** — see "Review brief" below for the full shape; default
   to the short form, go deeper only when asked.
 - **"Is anything else related to this?"** — `search_issues(query="<PR number or topic keywords, as plain language>", owner=..., repo=...)`
-  to find issues/discussions that mention the PR or its topic but aren't
-  formally linked. Cite what the search actually returned; an empty result
-  means "found nothing," not "nothing exists."
+  to find currently-open issues/discussions that mention the PR or its
+  topic but aren't formally linked, plus `mnemosyne_recall` for closed,
+  rejected, or deferred PRs on the same topic with a known reason —
+  extends the check past what's currently open into history with *why*.
+  Cite what was actually returned from each; an empty result means "found
+  nothing," not "nothing exists."
 - **"CI broke on `main`, what's affected?"** — real input, not something
   monitored for (no polling in v1, see `SOUL.md`). Use
   `actions_list`/`actions_get`/`get_job_logs` on demand to find the actual
@@ -315,3 +332,9 @@ shapes are common enough to call out specifically:
   review-thread/risk/Slack section unless asked or something's wrong.
 - Ask whether a PR was discussed in Slack and confirm the answer names the
   time window checked, not a bare yes/no.
+- Flag a PR touching a package-pair with a known `caused_e2e_failure`
+  triple and confirm the merge sequence cites the specific past incident,
+  not just the generic post-merge-suite warning.
+- Ask "is anything else related to this" about a topic with a real
+  closed/rejected PR history and confirm `mnemosyne_recall` surfaces it
+  with the reason, not just currently-open search results.

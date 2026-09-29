@@ -204,6 +204,15 @@ hooks:
       command: "./hooks/block-dangerous-tools.sh"
       timeout: 10
       fail_closed: true
+    # memory.write_approval stages mnemosyne_remember correctly (verified: a
+    # real pending file appears on disk) but mnemosyne_triple_add commits
+    # straight to the database, bypassing the gate entirely (verified: no
+    # pending file, the row lands immediately). This hook is the real control
+    # for that tool specifically — see docs/v2-plan.md Phase 8.
+    - matcher: "mnemosyne_triple_add"
+      command: "./hooks/block-mnemosyne-triples.sh"
+      timeout: 10
+      fail_closed: true
 
 platforms:
   slack:
@@ -214,6 +223,22 @@ platforms:
       reply_in_thread: true
       reply_broadcast: false
 
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+  # mnemosyne: local-only (SQLite, zero cloud), the one external provider of
+  # 9 real options that doesn't need a third-party account or a self-hosted
+  # server — everything else ships repo/Slack content to a vendor by design.
+  # Additive, not a replacement: MEMORY.md/USER.md stay active regardless.
+  provider: mnemosyne
+  # Every write staged for the maintainer's yes/no (/memory pending),
+  # including automatic background-review writes — this stores real
+  # repo/community judgments now, not just personal preferences. Known gap:
+  # this gate does not cover mnemosyne_triple_add (see the hook above) —
+  # verified live, not assumed from the plugin's own docs.
+  write_approval: true
+
 plugins:
-  enabled: []
+  enabled:
+    - mnemosyne
 agent: {}

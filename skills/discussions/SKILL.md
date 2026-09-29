@@ -29,6 +29,9 @@ does.
   `get_discussion`, `get_discussion_comments`, `discussion_comment_write`.
 - `search_code`/`search_issues` (already granted) for cross-referencing a
   discussion against related code or issues, on demand.
+- `mnemosyne_recall`/`mnemosyne_remember` — see `kyverno-context`'s "what
+  this agent remembers, and where" reference; used only at the points
+  below.
 - Env: `KYVERNO_REPO`, `MAINTAINER_GITHUB_LOGIN`.
 
 ## Quick Reference
@@ -69,7 +72,9 @@ does.
    (repo docs, relevant symbols) or `search_issues` (related issues/PRs) —
    cite what was actually found, same rule as `pr-queue`'s open-ended
    questions: don't answer from a general prior about what the repo
-   probably does.
+   probably does. Also `mnemosyne_recall` for whether a similar question
+   was already answered before — reuse a durable answer for consistency,
+   or flag the discrepancy if this one's premise differs.
 3. Draft the reply and show it to the maintainer before posting — same
    confirm-then-post pattern used for a Slack PTAL reply. A discussion
    answer is visible to the whole community reading that thread, not just
@@ -78,6 +83,11 @@ does.
    a new top-level comment, `method="reply"` when responding to a specific
    existing comment (get its `commentNodeID` from step 1's
    `get_discussion_comments` call first).
+5. If the answer covers a genuinely new, durable point (not something
+   already `recall`ed in step 2), `mnemosyne_remember` it — a one-line
+   summary of the question pattern plus the answer, so a similar future
+   question doesn't need re-deriving from scratch. Skip this for
+   discussion-specific trivia that won't recur.
 
 Completion criterion: the maintainer saw the exact reply text before it
 posted, and confirmed it — never post first and report after.
@@ -113,3 +123,5 @@ posted, and confirmed it — never post first and report after.
 - Ask about a discussion that references a symbol in the codebase and
   confirm `search_code` is actually called, with the citation shown, not a
   guess about what the code probably does.
+- Ask a question similar to one already answered and confirm it recalls
+  and reuses that earlier answer instead of re-deriving a new one.

@@ -17,3 +17,6 @@
   3. Shared bot, full capability — same bot also takes actions, but every action is attributed to one dedicated service
      account (a real kyverno-bot GitHub account with its own limited token), not any individual maintainer's identity. This is
      a deliberate governance decision the maintainers would need to actually make, not something to default into.
+
+- shared MEMORY using some hermes cloud memory extension like mem0.
+- local memory can be extended using "mnemosyne"

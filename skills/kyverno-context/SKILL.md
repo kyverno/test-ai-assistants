@@ -264,6 +264,89 @@ list is present without having seen it in that call.
 - Don't preload every repo doc every session — `search_code` on demand,
   scoped to the current question, not eagerly.
 
+## Reference: what this agent remembers, and where
+
+Three places, each for a different kind of thing — `pr-queue`/`pr-actions`/
+`discussions` point here instead of repeating this.
+
+**MEMORY.md / USER.md** (built-in, ~800+500 chars total) — a fixed set of
+*slots*, each holding the current value of one fact, `replace`d in place as
+it changes, never appended to as a growing log:
+
+- USER.md: review priority ordering, communication style, delegation
+  boundary, working cadence/timezone, standing risk tolerance, pet peeves
+  about this assistant's own output.
+- MEMORY.md: current milestone/focus, standing holds, maintainer-stated
+  sequencing intent (a human plan, not a GitHub-queryable fact — e.g. "PR
+  #1923 held until #1834 lands"), recently-settled structural repo facts,
+  active experiments/trials, a pointer line to Mnemosyne's existence, and
+  (once Phase 9 exists) open security-advisory tracking.
+
+**Never write to MEMORY.md/USER.md:** PR review/approval/merge/label state
+(always live via `pull_request_read`/`issue_read` — a memorized copy goes
+stale the moment anything changes), Slack messages within the fetchable
+history window (`pr-queue`'s on-demand lookup already covers "recent"),
+per-PR incident history/rejection reasons/contributor patterns (the
+accumulating category — see Mnemosyne below, this would blow the character
+budget within weeks), labels/CODEOWNERS (this skill already re-resolves
+them live every session).
+
+**Mnemosyne** (`mnemosyne_*` tools; `memory.provider: mnemosyne`) — for
+knowledge that either accumulates past what a slot can hold, or has no
+other live source of truth. Six categories:
+
+1. Post-merge breakage / risky package-combination log —
+   `mnemosyne_triple_add(subject=<package-pair>, predicate="caused_e2e_failure",
+   object=<PR#, date, description>)`. Retrieved via `mnemosyne_triple_query`
+   before flagging post-merge risk on a new PR touching the same packages —
+   turns "no path-to-suite mapping exists" into "no mapping, but N real
+   historical incidents on this combination."
+2. Rejected/deferred PR reasons — `mnemosyne_remember()` when a PR closes
+   unmerged with a known reason; `mnemosyne_recall()` when a similar new PR
+   appears.
+3. Contributor patterns — `mnemosyne_remember()` durable, repeated
+   observations; recalled before a review brief or discussion reply.
+4. Durable instructions surfaced from Slack — `mnemosyne_remember()` only
+   for a stated standing policy, never routine chatter.
+5. Milestone-scoped policy decisions —
+   `mnemosyne_triple_add(subject=<milestone>, predicate="excludes"/"prioritizes",
+   object=<policy>)`.
+6. CI/`e2e-gate` incident timeline —
+   `mnemosyne_triple_add(subject=<branch>, predicate="e2e_failure_opened"/"e2e_failure_closed",
+   object=<date, issue#>)` — the raw timeline behind category 1's pattern.
+
+Only these 8 tools are used: `mnemosyne_remember`, `_recall`, `_update`,
+`_forget`, `_triple_add`, `_triple_query`, `_diagnose`, `_sleep`.
+`_update`/`_forget` operate on a `remember()`-created `memory_id`, not on
+triples — to retire or replace a triple, add a new one (the default
+`supersede=true` closes the prior one automatically) or use `_triple_end`.
+Not used: `scratchpad_*`, `sync_*`, `export`/`import`, `graph_link`/
+`graph_query`, `batch`, `persona_*`, `shared_*`, media/model tools.
+
+**Real gap, found live, not assumed from the plugin's docs:**
+`memory.write_approval: true` correctly stages `mnemosyne_remember` (a real
+pending file appears on disk, needs `mnemosyne_apply_pending`) but
+`mnemosyne_triple_add` commits straight to the database, bypassing the gate
+entirely (verified: no pending file, the row lands immediately in the real
+`triples` table). `hooks/block-mnemosyne-triples.sh` is the actual control
+for that tool — it allowlists exactly the five predicates the categories
+above use (`caused_e2e_failure`, `e2e_failure_opened`,
+`e2e_failure_closed`, `excludes`, `prioritizes`) and blocks anything else.
+Adding a new triple-writing use case means extending that allowlist
+deliberately, not assuming `write_approval` covers it.
+
+**Two ways things get written — kept distinct:**
+
+- **Interactively** (categories 3, 4, 5, and any on-demand instance of 1/2):
+  written by whichever skill notices something worth keeping during a live
+  turn — there's no external event for a sweep to detect a milestone
+  policy or a Slack-stated instruction.
+- **Swept** (categories 1, 2, 6 specifically): a PR closing unmerged or an
+  `e2e-gate` trip can happen while nobody's asking — `cron/jobs.json`'s
+  `kyverno-memory-sweep` job checks for these on a schedule, mostly
+  `[SILENT]`. `kyverno-memory-consolidate` (weekly, separate cadence on
+  purpose) calls `mnemosyne_sleep` to compress accumulated entries.
+
 ## Verification
 
 - Ask "what labels does `<repo>` have" for two different `KYVERNO_REPO`
@@ -272,3 +355,9 @@ list is present without having seen it in that call.
 - Ask "does `<path>` need sign-off from `<team>`" and confirm the answer
   comes from a real `get_file_contents` + `get_team_members` call, not a
   guess.
+- Ask it to remember a fact that's really live PR/review state and confirm
+  it declines (or redirects to citing the live tool instead), rather than
+  writing a copy to memory that would immediately go stale.
+- Try to get it to `triple_add` a predicate outside the five listed above
+  and confirm the hook blocks it — a memory-relevant use case that's
+  actually needed should extend the allowlist, not bypass it.

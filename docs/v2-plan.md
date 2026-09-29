@@ -95,12 +95,11 @@ thing. Concretely, before touching code:
      same way `search_pull_requests` does — check GitHub's real search
      docs for the issue-search variant specifically.
    - `conversations_add_message`'s `thread_ts` parameter (threaded Slack
-     replies) — found via source-level search this session, not yet
-     confirmed against the tool's live schema (no valid, fully-scoped
-     Slack token was available). Needs a real `SLACK_MCP_XOXB_TOKEN` with
-     `channels:read` (a prior token was missing this scope and made the
-     whole server crash at startup — see `docs/architecture.md`'s Slack
-     section for why that's a hard-exit, not a soft failure).
+     replies) — confirmed against the tool's real registration schema
+     (`pkg/server/server.go`) once a real, fully-scoped
+     `SLACK_MCP_XOXB_TOKEN` existed. A live end-to-end post-and-reply test
+     against a real channel is still open — deferred by the user's own
+     choice (not a blocker found), not yet attempted.
 4. **Two decisions the user has not yet made — don't pick for them:**
    - **Phase 3 (session cache):** no persistent cache vs. a JSON-file
      cache via the `file` toolset vs. SQLite via `code_execution`. Each
@@ -253,32 +252,143 @@ Three options — do not pick one, ask:
 - **3b. JSON-file cache via the `file` toolset.** First-ever widening
   beyond MCP-only tools. Verify what `file` actually exposes (scoped
   directory vs. whole filesystem) before trusting it.
-- **3c. SQLite + `code_execution`** (the external pitch's exact design).
-  The broadest capability grant this project would ever make. Somewhat
-  de-risked by Hermes' own sandbox (confirmed this session: credentials
-  are stripped from the execution environment; scripts can't recursively
-  call MCP tools or `delegate_task`) — but that's not the same as
-  "verified safe for this specific use." Probe the real sandbox
-  boundaries (network access? filesystem scope? "project" vs "strict"
-  mode difference?) against the real installed Hermes CLI before trusting
-  it.
+- **3c. SQLite + `code_execution` — two separate problems, only one of
+  which is actually code's job.** The broadest capability grant this
+  project would ever make. An earlier pass at this plan conflated two
+  different things; corrected here:
 
-**Only once chosen:** `config.yaml` (toolset grant), new
+  **Problem 1 — the one this cache layer actually exists for:** stop
+  re-fetching the same GitHub data on every question, while knowing what's
+  still fresh vs. what needs a live re-check. This is a **per-field
+  invalidation** problem, and the trigger for each field is genuinely
+  deterministic, not a judgment call: a PR's file list, base/head branch,
+  and closes-issue linkage don't change unless its head SHA moves —
+  cache those, keyed by SHA, safe to reuse until the SHA changes. CI
+  status, label state, review state, and mergeable/conflict state change
+  constantly and matter for correctness — **never cache those; always
+  fetch live**, cache or no cache. This half is uncontroversial: nobody
+  wants the model re-deciding "is this still fresh" differently on
+  different days, so pin it as a fixed rule, not something reasoned about
+  per-query.
+
+  **Problem 2 — the final recommendation is NOT code's job; the
+  multi-factor graph feeding it IS.** An earlier pass framed the whole
+  ranking step as something that "has one correct answer" and should move
+  entirely into code, with the model only citing the result. That
+  overreached in one direction — whether a detected file-overlap is a
+  real conflict worth reordering for, whether something read in Slack
+  should bump a PR down, whether to override a mechanical score because
+  something contextual matters more — none of that has one right answer,
+  and none of it should get silently frozen into a script the model can't
+  reason on top of or push back on.
+
+  But there's a narrower, legitimately code-shaped problem inside this
+  one: **building the graph itself from several structured signals at
+  once** — file overlap, generated/interface ordering rules, stacked-PR
+  base/head chains, milestone alignment, age — is exactly where a model
+  tends to fail (juggling four or five signals in prose, landing on a
+  different answer if asked twice, dropping one on a busier PR set). A
+  deterministic function over the same inputs always produces the same
+  graph. So the script does two things, not one:
+  1. **Facts** — which PRs share which changed files (a set
+     intersection), which pairs have a hard ordering constraint from the
+     generated/interface classification (a DAG edge), whether the DAG has
+     a cycle (a yes/no flag for a human, never resolved silently), and
+     completeness (did the fetch actually get everything).
+  2. **One labeled candidate order** — hard constraints applied, ties
+     broken by the fixed milestone-tier/age rule already defined in
+     Phase 1. This is still just arithmetic over the facts above, so it's
+     safe to compute in code — but it ships to `pr-queue` explicitly
+     tagged as a *candidate*, never a verdict.
+
+  `pr-queue`'s job on top of that candidate: check it against everything
+  the graph can't see — Slack tone, review-thread content, anything the
+  maintainer said earlier in conversation or is in memory — and say so
+  when it disagrees, rather than silently repeating the candidate or
+  silently overriding it without explanation.
+
+  **Verified directly against this machine's installed Hermes build**
+  (`~/.hermes/hermes-agent`, a git install — read the actual source, not
+  docs, per this project's standing rule) — correcting an earlier,
+  partly-wrong pass at this same verification:
+  - **True:** credentials are stripped from the child env by
+    name-pattern (`KEY`/`TOKEN`/`SECRET`/`PASSWORD`/`CREDENTIAL`/... —
+    `tools/code_execution_env.py`'s `_SECRET_SUBSTRINGS`); `write_file`/
+    `patch` take `cross_profile: bool = False` (isolation is the
+    default); under a multiplexed gateway, `HERMES_HOME` is rewritten
+    per-turn via a ContextVar bound to the actively-routed profile.
+  - **False — does not exist in the source:** no `/workspace` path, no
+    `container_persistent` flag, no "one persistent container per
+    process." Zero hits for either string anywhere in
+    `tools/code_execution_{tool,env,rpc}.py`. Don't rely on either name.
+  - **Overstated — "already profile-isolated by design, nothing to
+    build":** the real default (`code_execution.mode` in
+    `hermes_cli/config_defaults.py`, default `"project"`) runs the
+    script as a plain subprocess, the real interpreter, **directly in
+    the session's actual working directory — no container at all**
+    unless the terminal backend is separately configured for
+    Docker/SSH (its own undecided infra step). The isolated option is
+    `mode: "strict"` — an isolated temp dir with Hermes' own bundled
+    Python — and it must be chosen deliberately; it is not what happens
+    by default.
+  - **Not mentioned by the earlier pass, and load-bearing:** a script
+    run via `execute_code` can only ever call 7 fixed built-ins —
+    `web_search`, `web_extract`, `read_file`, `write_file`,
+    `search_files`, `patch`, `terminal` (`SANDBOX_ALLOWED_TOOLS` in
+    `tools/code_execution_tool.py`, hardcoded). **MCP tools are
+    unreachable from inside a script — confirmed by grep, zero
+    references to `mcp` anywhere in the tool's source.** So `pr-queue`
+    fetching via its existing GitHub MCP tools and handing the script
+    already-fetched JSON isn't a design choice — it's the only thing
+    that's possible. Also confirmed: `write_file`/`patch`/`terminal`
+    stubs only appear in a script's toolbox when those toolsets are
+    *separately* granted to the session — adding `code_execution` alone
+    does not smuggle in `file`/`terminal` access. Real, unrestricted
+    filesystem access still exists a level below the tool layer, though
+    — a script can call Python's own `open()`/`sqlite3` directly, which
+    isn't gated by any Hermes tool-permission check at all, since it
+    never goes through an RPC. `mode: strict` is what bounds that.
+
+  **If building this:** grant `code_execution` only (not `file`/
+  `terminal` — confirmed unnecessary for a script that only needs to
+  read the JSON it's handed and write a SQLite file), pin
+  `code_execution.mode: strict` explicitly rather than accepting the
+  `project` default (no cost to this profile — the script never needs
+  project-relative-path access, only a stable place to write one SQLite
+  file), and treat the grant with the same scrutiny as every other
+  capability boundary in this project — a `pre_tool_call` hook
+  consideration for `execute_code` calls, not an exemption because the
+  sandbox "already handles it." The SQLite schema stores **facts only**
+  — file-overlap sets, DAG edges, per-field freshness timestamps, cycle
+  flags — never a precomputed "final order." The model recomputes the
+  actual recommendation from those facts every time it's asked, so the
+  same underlying facts can still be weighed differently as context
+  changes (a new Slack message, a risk the maintainer points out) without
+  anyone having to touch the script.
+
+**Only once chosen:** `config.yaml` (toolset grant — `code_execution`
+only, `mode: strict` set explicitly), new
 `skills/kyverno-bootstrap/SKILL.md` + `kyverno-sequence/SKILL.md` +
 `kyverno-review/SKILL.md` (the pipeline-stage split becomes justified
 here), a cache-schema doc, a `cron/jobs.json` entry, a new
-`docs/architecture.md` write-up matching the depth of the existing ones.
+`docs/architecture.md` write-up matching the depth of the existing ones,
+and — before any of that — a live probe of `mode: strict`'s actual
+filesystem/network boundaries against this real installed build (same
+discipline as every other tool grant here; reading the source confirms
+what the *code* does, not what a live run actually permits).
 
-## Phase 4 — Slack: on-demand only (folds into Phase 2)
+## Phase 4 — Slack: on-demand only (folds into Phase 2) — BUILT
 
-No bulk ingestion, no cron sweep, no standing Slack context loaded up
-front — call `conversations_history` only when the maintainer is actively
-reviewing/acting on a specific PR, or explicitly asks about Slack context.
-New capability: when a review brief surfaces a PTAL thread, offer to draft
-and post a reply via `conversations_add_message` with `thread_ts` set to
-the original message (verify this parameter against the live schema
-first — see "Before you implement" above). Draft, show the maintainer,
-post only on confirmation.
+Built into `skills/pr-queue/SKILL.md`'s "Review brief" section: no bulk
+ingestion, no cron sweep, no standing Slack context loaded up front — calls
+`conversations_history` only when the maintainer is actively reviewing/
+acting on a specific PR, or explicitly asks about Slack context. When a
+review brief surfaces a PTAL thread, drafts a reply and shows it to the
+maintainer; posts via `conversations_add_message` with `thread_ts` set to
+the original message only on confirmation. `thread_ts` is confirmed
+against the real tool schema (source-level, once a real token existed —
+see "Before you implement" above); a live end-to-end post-and-reply test
+is still open, deferred by choice, not by a blocker found.
 
 ## Phase 5 — Code-graph (v1.1, recommended against for now)
 
@@ -341,7 +451,7 @@ everywhere else in this doc) before being written down — not assumed from
 the request. One of them (Phase 10) is the single biggest capability grant
 this project has ever considered and needs to be treated that way.
 
-## Phase 7 — GitHub Discussions (small, low-risk addition)
+## Phase 7 — GitHub Discussions (small, low-risk addition) — BUILT
 
 **What:** answer contributor discussions when asked — read, and reply.
 
@@ -356,63 +466,66 @@ labels" — restrict via skill instruction (only ever use `add`/`reply`
 unless explicitly asked to do something else), not by pretending the tool
 itself is narrower than it is.
 
-**Files:** `config.yaml` (add these 5 tools to `tools.include`, recompute
-`GITHUB_EXCLUDE_TOOLS` as the exact complement, re-verify live the same
-way as every other tool here), a new `skills/discussions/SKILL.md` or fold
-into `pr-actions` if small enough once written.
+**Files:** `config.yaml` — done, exact-complement re-verified live (35
+tools returned by the real container, matching `tools.include` exactly).
+`skills/discussions/SKILL.md` — done, its own skill rather than folded into
+`pr-actions` (answering a discussion requires synthesizing an answer —
+analysis — which `pr-actions` deliberately never does). Sandbox test
+scenarios blocked on enabling Discussions on `kyverno/test-ai-assistants`
+(`has_discussions: false` currently — needs a maintainer-level toggle in
+repo Settings, the API call for it 404'd under this session's token scope).
 
 **Decision needed:** none — this is a normal, narrow, single-purpose
-addition following the established process. Build it.
+addition following the established process. Built.
 
-## Phase 8 — Persistent memory: build this, don't just gate it
+## Phase 8 — Persistent memory — BUILT
 
-**What Hermes' memory feature actually is** (read from the real feature
-doc, not assumed): two per-profile files under
-`~/.hermes/profiles/<name>/memories/` — `MEMORY.md` (the agent's own
-environmental notes, ~2200 char limit) and `USER.md` (maintainer
-preferences/working style, ~1375 char limit). Writes only happen via an
-explicit `memory` tool call (`add`/`replace`/`remove`) — text like "I've
-saved that" with no tool call persists nothing. Loaded as a frozen
-snapshot at session start (~1300 tokens total, fixed cost, cache-friendly
-— doesn't grow per-turn). Entries are scanned for injection/exfiltration
-patterns before being accepted. User-inspectable (`cat`), reviewable
-(`/memory pending`), approvable/rejectable, editable, deletable — not a
-black box.
+Full content design (what goes in MEMORY.md/USER.md vs. what goes in
+Mnemosyne, and why) lives in `skills/kyverno-context/SKILL.md`'s "what this
+agent remembers, and where" reference — not repeated here.
 
-**This is exactly the tool for "know what the maintainer wants, how they
-work, what sequence they work in."** `USER.md` is purpose-built for it.
-Unlike Phase 3's cache options or Phase 10 below, this isn't a
-categorically new kind of risk — it's a small, privacy-conscious,
-already-auditable Hermes feature that happens to be unused right now.
-Recommend building it, not gating it.
+**Provider decision, made and built:** Mnemosyne (`mnemosyne-oss/mnemosyne`,
+catalog plugin) over the 8 other external providers — the only one of 9
+with real community adoption (3,277 stars) *and* zero cloud dependency;
+every other option needs a third-party account or a self-hosted server. It
+runs additively alongside MEMORY.md/USER.md, never replacing them —
+confirmed from the real feature docs, not assumed.
 
-**Config needed:**
+**Config, verified live** (`config.yaml` — no `toolsets:`/`custom_toolsets:`
+change needed; memory-provider tools aren't part of that registry at all,
+correcting an earlier, unverified guess in this same section):
 ```yaml
 memory:
   memory_enabled: true
   user_profile_enabled: true
+  provider: mnemosyne
+  write_approval: true
+plugins:
+  enabled:
+    - mnemosyne
 ```
-plus granting the `memory` toolset (currently only `kyverno-assistant-tools`
-is granted — this is a second, separate toolset to add to the `toolsets:`
-list, verify it doesn't pull in anything beyond the `memory` tool itself).
 
-**What to actually write to memory, concretely:** `USER.md` — the
-maintainer's real review cadence and priorities as they're revealed in
-conversation (e.g. "always wants stacked PRs called out even when not
-asked," "treats Dependabot major-bumps as urgent," "prefers terse queue
-summaries"). `MEMORY.md` — durable facts about the repo/environment this
-agent keeps re-deriving that are actually stable (not the live-resolved
-stuff like labels/CODEOWNERS, which must stay live per `kyverno-context`'s
-existing rule — memory is for *this agent's own* operational notes, not a
-cache of repo state). Also where the security-advisory triage log from
-Phase 9 lives (see below) — this is what makes that phase a loop instead
-of a one-off.
+**A real gap, found live, not from the plugin's docs:** `write_approval`
+correctly stages `mnemosyne_remember` (confirmed: a real pending file
+appears on disk) but `mnemosyne_triple_add` commits straight to the
+database, bypassing the gate entirely (confirmed: no pending file, the row
+lands immediately in the real `triples` table). Patched with
+`hooks/block-mnemosyne-triples.sh`, a `pre_tool_call` hook allowlisting the
+five predicates this design actually uses — the same layered-defense
+instinct as `hooks/block-dangerous-tools.sh`, applied because the plugin's
+own gate can't be trusted uniformly across its tools.
 
-**Needs verification before trusting:** the exact `memory` tool's
-call shape (add/replace/remove arguments) against a live Hermes session —
-this session read the feature doc but never exercised the tool for real.
+**Two new cron jobs ship in `cron/jobs.json`, both paused by default:**
+`kyverno-memory-sweep` (every 5 days, mostly `[SILENT]`) scans for PRs that
+closed unmerged and new `e2e-gate` incidents — the two things that can
+happen while nobody's asking the assistant anything. `kyverno-memory-
+consolidate` (weekly, `deliver: local`) calls `mnemosyne_sleep` to compress
+accumulated entries. Deliberately two separate jobs, not folded into
+`kyverno-review-digest` or each other — a Slack-facing digest, a silent
+event-sweep, and a batch-compression step have three different natural
+cadences and failure profiles.
 
-**Decision needed:** none, recommended to build directly.
+**Decision needed:** none — built.
 
 ## Phase 9 — Security-advisory triage (read + reasoning only, no new write risk)
 
@@ -560,7 +673,163 @@ does anything without being asked, and exactly how far that goes (notice
 maintainer has decided not to let the agent fix anyway) — revisit once
 Phase 10 is resolved, not before.
 
-## Summary addition — three more things needing your explicit call
+## Extension 2 — the rest of Hermes' automation surface
+
+Researched directly against Hermes' own docs — `guides/automate-with-cron`,
+`guides/github-pr-review-agent`, `guides/delegation-patterns`,
+`user-guide/messaging/webhooks`, `user-guide/features/goals`,
+`user-guide/features/heartbeat`, `user-guide/features/loops`,
+`reference/automation-blueprints-catalog` — fetched and read directly
+(not WebFetch-summarized), per this project's standing rule. The question
+behind this pass: "fully use ALL the hermes capabilities possible to
+automate everything in a maintainer's life... we don't want the maintainer
+doing anything except setting up this properly." Phases 1-11 already use
+cron (Phase 1's sweep, Phase 11's triage) and memory (Phase 8); delegation
+stays ruled out for sub-profile isolation — confirmed again this pass,
+subagents inherit the parent's *exact* toolset, never narrower, never
+wider. What's new below: real-time triggering, turnkey setup, a better
+execution mechanism for Phase 10, and a concrete lever on token cost.
+
+### Phase 12 — Real-time triggering via Hermes' own webhook adapter (GATED)
+
+**What:** Hermes' gateway can run its own HTTP server
+(`platforms.webhook`, default port 8644) that receives GitHub webhook
+POSTs directly — HMAC-validated (`X-Hub-Signature-256`), routed by event
+type — and can fire an **existing cron job** the instant a real event
+lands (a route's `cron_job: <id>` property) instead of waiting for that
+job's next tick. The event is injected as transient per-run context; the
+job's own prompt, skills, model, and delivery stay exactly as configured.
+Phase 1's sweep and Phase 11's triage job could go from "polls every 8h"
+to "fires the moment a PR opens/updates, a review lands, or a security
+advisory publishes" — keeping the existing schedule as a fallback sweep,
+which is Hermes' own documented pattern for this ("keep the schedule as a
+fallback... let the webhook fire it the moment something actually
+changes"). This is the most direct lever on "automate everything, maintainer
+does nothing": polling has latency and burns a turn even when nothing
+happened; a webhook fires exactly on change and costs nothing otherwise.
+
+**Why gated, not just built:**
+- **New infrastructure step.** This needs a publicly reachable endpoint —
+  Hermes' gateway opens the port, but something still has to sit in front
+  of it (a tunnel like Cloudflare Tunnel/ngrok, or a VPS) so GitHub can
+  reach `https://<host>:8644/webhooks/<route>` from the internet. This
+  project has never asked a maintainer to expose anything before now —
+  the README's "no server to run, no webhook receiver" is true today and
+  would become conditional on this phase. Same category of explicit
+  decision as Phase 6's merge queue, not a technicality.
+- **Threat model shift.** Today, every PR title/issue body/advisory text
+  this profile reads only reaches the agent when the maintainer asks
+  about that specific item — the maintainer implicitly curates what the
+  agent looks at. A webhook route makes arbitrary GitHub content (anyone
+  who can open a PR/issue on the target repo) the *trigger* for a session,
+  not just something read on request. Hermes' own docs are explicit here:
+  "authenticated does not mean trusted" — HMAC proves GitHub sent it, not
+  that the PR title is safe to act on. Their stated mitigations: template
+  narrowly (never dump the raw payload), keep the route's toolset scoped
+  (webhook routes default to a deliberately narrow toolset —
+  `web_search`, `web_extract`, `vision_analyze`, `clarify` — never this
+  profile's GitHub/Slack MCP tools unless a route explicitly widens it via
+  a manual config edit, specifically so a self-created subscription can't
+  self-grant elevated tools), and keep confirmation on for outbound
+  actions. If built, every route here should point `cron_job` at an
+  existing Phase 1/11 job rather than run in open agent mode, and use
+  `coalesce` on the PR routes so a PR with five rapid pushes fires one
+  sweep, not five.
+
+**Needs verification before building:** whether a `cron_job`-fired run
+actually reaches this profile's github-mcp toolset the same way a normal
+scheduled tick does (the docs say the job's own settings apply, not yet
+checked live); GitHub's `security_advisory` webhook event is org-level,
+not repo-level, and needs separate setup from the PR/issue webhooks.
+
+**Decision needed (yours):** build this at all, given the new exposure
+requirement — a maintainer may reasonably prefer to stay on Phase 1/11's
+polling forever. If yes, the exposure story (tunnel vs. small VPS) is
+also yours; this plan doesn't pick one.
+
+### Phase 13 — Ship this profile's automations as Blueprints (recommend building)
+
+**What:** Hermes has a first-class "Blueprint" mechanism — a skill with a
+`metadata.hermes.blueprint` block in its `SKILL.md` frontmatter becomes
+something a maintainer invokes as `/blueprint <name>` from any surface
+(CLI, chat, dashboard). Hermes asks for only what it actually needs (a
+channel, a time) one question at a time, then schedules the job — no
+hand-written `hermes cron create` invocation, no cron syntax. This is the
+exact mechanism for "maintainer does nothing except run a few commands":
+wrap the already-shipped review-digest job, and Phase 11's triage job once
+built, as blueprints, so turning them on is `/blueprint
+kyverno-review-digest` (answer 2 questions) instead of README step 9's
+`hermes cron resume kyverno-review-digest` plus hand-editing the schedule.
+
+**Needs verification:** the exact `metadata.hermes.blueprint` frontmatter
+slot schema — this pass confirmed the feature and its invocation model,
+not the schema itself (the reference doc points to "Creating Skills →
+Automation Blueprints", not yet fetched — read it before implementing).
+
+**Decision needed:** none. Pure packaging on top of jobs this plan already
+decided to build (or not) elsewhere; no new tool grant, no new risk.
+
+### Amendment to Phase 10 — `/goal` with a completion contract as the execution mechanism
+
+Phase 10 already requires draft PRs and per-instance confirmation before
+anything is proposed. Layer Hermes' `/goal` primitive underneath that as
+*how* the fix gets produced, instead of one-shot generation: give the
+confirmed session a completion contract — outcome ("the vulnerability in
+GHSA-xxxx no longer reproduces"), verification (a named test command) —
+plus a quality gate (`/goal gate add "go test ./pkg/<affected>/..."`), so
+the agent keeps iterating within that single confirmed session's turn
+budget until the fix is actually verified, not just generated and hoped
+correct. This directly answers the open "how should Phase 10 actually
+execute" question the original write-up left implicit.
+
+### Amendment to Phase 1's digest and Phase 11's triage — script prefilter + `[SILENT]`
+
+**What:** cron's `--script` parameter runs a plain Python script before
+the agent turn; its stdout becomes the agent's entire input for that tick,
+so mechanical work (diffing labels, deduping advisories against what's
+already flagged) never costs a model call. Paired with the `[SILENT]`
+convention — a reply of exactly `[SILENT]` triggers no delivery and no
+formatting cost — this is a concrete answer to the "low token cost"
+requirement repeated throughout this plan: the existing review-digest job
+and Phase 11's triage job should both do their mechanical fetch/diff in a
+script and only invoke the agent when the script detects something
+genuinely new.
+
+**Needs verification:** whether a distribution's shipped `cron/jobs.json`
+can reference a `script:` path bundled inside the distribution repo
+itself, or whether Hermes only resolves `script:` under the installed
+profile's own `~/.hermes/scripts/` (meaning the script would need to be
+copied there separately at install time). This pass confirmed the
+parameter and its contract, not this path-resolution detail.
+
+### Researched and set aside — Kanban
+
+Hermes has a Kanban board: many independent tasks, each dispatched to its
+own worker process/session, with dependencies and handoffs, optionally
+running in `--goal` mode per card. The PR review queue is shaped like a
+board in principle (each ready-for-review PR a card, stacked-PR
+dependencies as card dependencies) — but this pass confirmed the feature
+exists and roughly what it targets, not its cost model, worker
+sandboxing, or whether a mechanism built for many parallel *executing*
+workers even fits a profile whose actual job is recommending, not
+executing. Phase 1's topological sort already computes the ordering; a
+board would visualize it, not compute it better. Same treatment as Phase
+5's code-graph: set aside, revisit only if a real need for parallel
+*execution* shows up — nothing in this plan currently asks for that.
+
+### Confirmed, no action needed — cron jobs already inherit this profile's exact toolset
+
+Confirmed directly: Hermes cron jobs run "with the normal static tool
+list" by default — this profile's three-layer-verified allowlist
+(`tools.include` + `GITHUB_EXCLUDE_TOOLS` complement + the
+`pre_tool_call` hook) applies automatically to every cron job this
+profile runs, Phase 11's triage job included, with zero extra permission
+work. A cron-specific override exists (`enabled_toolsets`, per-job or
+platform-wide) but only to narrow further, never to grant something the
+profile-level config didn't already allow. Worth one line in
+`docs/architecture.md` once Phase 11 ships; not urgent now.
+
+## Summary addition — five more things needing your explicit call
 
 4. **Phase 10 (security fix PRs):** build it at all, and if so, what
    confirmation/hook-allowlist design gates it. The single highest-stakes
@@ -571,3 +840,9 @@ Phase 10 is resolved, not before.
 6. **Phase 11 (scheduled triage):** worth deciding only after Phase 10 is
    resolved — a notification about something the agent still can't act on
    without being asked is lower-value than once Phase 10 exists.
+7. **Phase 12 (real-time webhook triggering):** build it at all, given it
+   requires exposing a public endpoint — a genuinely new deployment step
+   this project has never asked a maintainer for before.
+8. **Phase 12's exposure story, if yes:** self-hosted + tunnel
+   (Cloudflare Tunnel/ngrok) vs. a small VPS running the gateway — this
+   plan doesn't pick one.
