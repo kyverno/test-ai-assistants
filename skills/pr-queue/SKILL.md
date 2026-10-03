@@ -35,6 +35,10 @@ that skill's knowledge is assumed available, not re-derived here.
   `get_secret_scanning_alert`, `actions_list`, `actions_get`,
   `get_job_logs`, `request_copilot_review`.
 - `mcp-slack` tools: `conversations_history`, `conversations_add_message`.
+- `sequence_prs` (plugin tool, `plugins/kyverno-sequencer/`) — the deterministic candidate
+  merge-sequence computation: classification, hard-precedence graph, cycle detection, and a
+  weighted CP-SAT rank solve (milestone urgency, age, size, e2e-gate risk, review-readiness).
+  See Procedure below for what to pass it and how to treat what it returns.
 - `mnemosyne_recall`/`mnemosyne_triple_query` (read) and
   `mnemosyne_remember`/`mnemosyne_triple_add` (write) — see
   `kyverno-context`'s "what this agent remembers, and where" reference for
@@ -79,6 +83,12 @@ that skill's knowledge is assumed available, not re-derived here.
 - `conversations_history(channel_id=SLACK_HOME_CHANNEL, limit="<window>")`
   — priority signals mentioning the bot or a specific PR; no query param,
   see "Review brief" step 6 for why and how to search it anyway.
+- `sequence_prs(prs=[...], precedence_hints=[...], repo_default_branch=..., gate_open=...)` —
+  pass every candidate's changed files/labels/branches/milestone-alignment/review-readiness
+  (all already fetched per Procedure step 2), plus any interface/dependency-usage edges you've
+  derived from `search_code` as `precedence_hints` (it can't derive those itself — see the
+  tool's own schema description). Returns a candidate `sequence`, any `cycles` (unresolvable —
+  hand to the maintainer, don't pick an order), `unresolved` pairs, and which solver ran.
 - `conversations_add_message(channel_id=SLACK_HOME_CHANNEL, thread_ts=..., ...)`
   — post the queue into the channel when asked to ("share this with the
   channel", "post the queue"), or reply in a thread (`thread_ts` set to the
@@ -94,57 +104,74 @@ that skill's knowledge is assumed available, not re-derived here.
 
 ## Procedure: build the merge-sequence recommendation
 
-1. Fetch the full candidate set in one pass: human and Dependabot PRs
-   carrying `label:ready-for-review`, plus Dependabot PRs carrying
-   `label:needs-review` — all of them enter the same graph and the same
-   final sequence. A `needs-review` entry carries its diagnosed blocker
-   (step 5 below) with it into its sequence position; it is never pulled
-   into a side list.
+1. Fetch the candidate set: human and Dependabot PRs carrying
+   `label:ready-for-review`, plus Dependabot PRs carrying `label:needs-review`
+   — all of them enter the same graph and the same final sequence. A
+   `needs-review` entry carries its diagnosed blocker (step 5 below) with it
+   into its sequence position; it is never pulled into a side list.
+   **This set can be 100+ PRs on a real repo** — `total_count` is accurate,
+   not inflated; don't fetch it all. Default to a manageable slice unless
+   asked for everything:
+   - `perPage` 10-15 per call.
+   - Add any filter the maintainer named (milestone, `release-critical`/
+     `release-high`, a label) as its own query qualifier, not a
+     post-filter over the full set.
+   - State the slice size vs. the total (e.g. "top 12 of 146") — never
+     present a partial sequence as if it were the whole queue.
 2. For every candidate in one turn, emit the changed-files fetch
    (`get_files`) concurrently rather than sequentially. Also fetch
-   base/head branch (`get`), age (`created_at`), and milestone for each.
-   For a Dependabot candidate, `get_files` is almost always `go.mod` /
-   `go.sum` (+ any vendored/generated files this repo's build produces);
-   note the bumped module path from the diff for step 4's usage edge.
-3. Classify every changed file per `kyverno-context`'s risk vocabulary
-   (generated / interface / test-only / unclassified).
-4. Build the file-overlap conflict graph: an edge between any two
-   candidates sharing a changed or generated-output path. Cross-reference
-   the whole candidate set on top of it:
-   - **Stacked**: PR B's base branch equals PR A's head branch, not the
-     repo default — a hard edge, B after A, independent of the graph.
-   - **Generated-file conflict**: an edge where the shared path is a
-     generated-file *input* — order input-before-output when one side is
-     literally the codegen run; otherwise this pair has no derivable
-     order — flag it for a human rather than picking one. A Dependabot PR
-     bumping `github.com/kyverno/api` (or an equivalent code-generating
-     dependency) counts as touching a generated-file input by
-     `kyverno-context`'s fan-out map — check it against the same generated
-     *output* paths (CRDs/clientset/CLI copies/chart templates) any other
-     candidate touches, not just against literal `go.mod` overlap.
-   - **Interface conflict**: an edge on an interface-tier file — order
-     definer-before-implementer when the diffs make the direction
-     unambiguous; flag a cycle for a human otherwise.
-   - **Dependency-usage edge (Dependabot, non-codegen dependencies)**:
-     for a bumped module that isn't itself a generated-file input,
+   base/head branch (`get`), age (`created_at`), milestone, and a
+   `get_reviews`/`get_review_comments` pass for review-readiness (CodeRabbit
+   approval + unresolved-thread count) for each. For a Dependabot candidate,
+   `get_files` is almost always `go.mod` / `go.sum` (+ any vendored/generated
+   files this repo's build produces); note the bumped module path from the
+   diff — pass it as `dependency_bumps` so `sequence_prs` can treat a
+   `github.com/kyverno/api` bump as a generated-file-input touch even with
+   no `api/**` path in `changed_files`. Also resolve each candidate's
+   `milestone_alignment` ("direct" / "referenced" / "none") here — from its
+   closing issue (`issue_read`, see "Explain PR #N" below) and that issue's
+   milestone; `sequence_prs` uses it as a soft-priority weight, not a
+   tie-break. A Dependabot PR has no closing issue: pass `"none"`.
+3. Before calling the tool, work out anything it can't derive from file
+   paths alone and pass it as `precedence_hints`:
+   - **Interface conflict**: a shared interface-tier file (per
+     `kyverno-context`'s vocabulary) where the diffs make the
+     definer-before-implementer direction unambiguous — a
+     `{before, after, reason}` hint. Direction not derivable: don't guess
+     — leave it out and separately flag the pair for a human.
+   - **Dependency-usage edge (Dependabot, non-codegen dependencies)**: for
+     a bumped module that isn't itself a generated-file input,
      `search_code` its import path within `KYVERNO_REPO`. Any other open
-     candidate whose own changed files import it gets a hard edge — the
-     bump lands after that PR, so the PR's own review isn't done against a
-     dependency surface that just moved. No such candidate: fall through
-     to milestone-alignment/age like any unconstrained entry.
-   - **Package overlap** (no file-level edge, same package): flag as
-     elevated review risk, not a sequencing constraint.
-   - **Post-merge CI risk**: which packages map to `kyverno-context`'s
-     post-merge-only suites — a per-PR risk note, not a sequencing edge.
-     Check whether an `e2e-failure` issue is already open for the target
-     branch first; if so, say the whole queue is currently gated, don't
-     bury that inside one PR's note. Also `mnemosyne_triple_query` the
-     candidate's touched package-pairs for a `caused_e2e_failure` predicate
-     — an actual historical incident on this combination is a stronger,
-     more specific note than the generic post-merge-suite flag alone; cite
-     the incident (PR#, date) when one exists, and say plainly when the
-     query returns nothing rather than implying a clean history was checked
-     and confirmed.
+     candidate whose own changed files import it becomes a
+     `{before: candidate, after: dependabot_pr}` hint — the bump lands
+     after that PR, so its review isn't done against a dependency surface
+     that just moved.
+   Stacked-branch edges and generated-file input-before-output edges don't
+   need a hint — `sequence_prs` derives both mechanically from
+   `base_branch`/`head_branch`/`changed_files`/`dependency_bumps`.
+4. Call `sequence_prs` with every candidate's fetched metadata (step 2),
+   the `precedence_hints` from step 3, `repo_default_branch`, and whether
+   an `e2e-failure` issue is currently open for the target branch
+   (`gate_open`). Treat the result as a **candidate**, not a verdict:
+   - Any `cycles` entry means the tool found a genuine contradiction — hand
+     those PRs to the maintainer named explicitly, don't pick an order.
+   - Any `unresolved` entry (e.g. two PRs both touching a generated-file
+     input with no derivable order between them) gets the same treatment.
+   - Package overlap (same package, no file-level edge) isn't something the
+     tool flags as risk on its own — note it yourself if you notice it
+     while reading the candidates' changed files; it's an elevated-review
+     signal, not a sequencing constraint.
+   - Post-merge CI risk: cross-check the candidate order's `risk`/`warnings`
+     fields against `kyverno-context`'s post-merge-only suites and, per
+     candidate's touched packages, `mnemosyne_triple_query` for a
+     `caused_e2e_failure` predicate — an actual historical incident on that
+     combination is a stronger, more specific note than the tool's generic
+     gate-risk flag alone; cite the incident (PR#, date) when one exists,
+     and say plainly when the query returns nothing.
+   - If the tool's candidate order doesn't match something you know from
+     Slack (step 7 below) or a maintainer instruction earlier in the
+     conversation, say so explicitly and explain the override — never
+     silently repeat the candidate as-is *or* silently reorder it.
 5. **Diagnose every `needs-review` entry** rather than reporting the bare
    label: read `get_reviews` for Copilot's verdict body, `get_check_runs`/
    `get_status` for failing checks, and `get`'s mergeable-state field for a
@@ -172,29 +199,23 @@ that skill's knowledge is assumed available, not re-derived here.
    regen, running the codegen targets that produce the stale outputs just
    named), describe the fix and ask the maintainer whether to apply it —
    see `pr-actions` for what happens next.
-6. Topologically sort the graph (stacked/generated-input/interface/
-   dependency-usage edges as hard ordering constraints). Any cycle: don't
-   invent an order — name the PRs in the cycle and hand it to the
-   maintainer. Within each unconstrained tier, reorder by
-   milestone-alignment (closes the milestone issue directly > closes an
-   issue the milestone issue itself references > age as tiebreaker) — this
-   needs each candidate's closing issue (`issue_read`, see "Explain PR #N"
-   below) and that issue's milestone. A Dependabot PR has no closing issue;
-   its tier position comes from the dependency-usage edge or age alone.
-7. Read `SLACK_HOME_CHANNEL` history for messages naming the bot or a
+6. Read `SLACK_HOME_CHANNEL` history for messages naming the bot or a
    specific PR — treat as a ranking signal and cite the message when it
-   changes the order.
-8. Produce the one ordered sequence. Every position — human or
+   changes the order (per step 4's override rule above).
+7. Produce the one ordered sequence from `sequence_prs`'s candidate,
+   step 5's diagnosis, and step 6's Slack check. Every position — human or
    Dependabot, `ready-for-review` or `needs-review` — needs a one-line,
    citable reason; a `needs-review` entry's reason is its diagnosed cause
-   from step 5, not just the label name.
+   from step 5, not just the label name; a position you've overridden from
+   the tool's candidate needs its override reason stated, not silently
+   substituted.
 
 Completion criterion: every candidate from step 1 appears exactly once, in
-the position its file-overlap/dependency-usage/milestone reasoning actually
-puts it, and a human could re-derive the whole order from the stated
-reasons alone. This phase's sequencing quality doesn't depend on anything
-actually merging — the topological sort is the whole value; who
-mechanically executes a merge afterward is a separate concern.
+the position `sequence_prs` plus steps 5-6's overrides actually puts it,
+and a human could re-derive the whole order from the stated reasons alone.
+This phase's sequencing quality doesn't depend on anything actually
+merging — the precedence graph and weighted candidate order are the whole
+value; who mechanically executes a merge afterward is a separate concern.
 
 ## Review brief: explain PR #N
 
@@ -312,11 +333,18 @@ shapes are common enough to call out specifically:
 ## Verification
 
 - Ask for the merge sequence twice in a row with no repo state change and
-  confirm the order and stated reasons are stable.
+  confirm the order and stated reasons are stable (`sequence_prs` is
+  deterministic for identical input).
 - Pick two PRs that touch the same `api/**` path and confirm the sequence
   calls out the generated-file conflict explicitly, with an input-before-
   output order or an explicit human flag, not just a normal ordering
   difference.
+- Ask for the sequence when two otherwise-comparable candidates differ only
+  in review-readiness (one CodeRabbit-approved with no unresolved threads,
+  one not) and confirm the ready one ranks earlier with that reason stated.
+- Confirm the presented sequence visibly checks `sequence_prs`'s candidate
+  against Slack/Dependabot context — agreeing, disagreeing, or overriding
+  with a stated reason — rather than repeating the tool's output verbatim.
 - Confirm a Dependabot `needs-review` PR's position in the sequence comes
   with a diagnosed cause (Copilot's verdict, a failing check, or a
   conflict), not just the bare label name.

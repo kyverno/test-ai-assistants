@@ -46,12 +46,21 @@ mcp_servers:
       - ghcr.io/github/github-mcp-server
     env:
       GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
-      # Lockdown mode filters content from accounts without push access —
-      # this agent reads community PR/issue bodies and comments and can act
-      # on them (labels, reviews), so treat that content as adversarial by
-      # default. Best-effort content filter, not an authorization boundary;
-      # (1)/(2)/(3) above are what actually limit privileged actions.
-      GITHUB_LOCKDOWN_MODE: "1"
+      # Lockdown mode OFF — verified this breaks the tool outright, not a
+      # tradeoff. Live-tested against the real container: with it on, every
+      # pull_request_read call 403s for ANY non-collaborator token, because
+      # the server's own lockdown check calls GitHub's collaborator-
+      # permission endpoint on the PR's AUTHOR to decide whether to filter —
+      # and that endpoint itself requires the CALLING token to have
+      # push access on the repo ("403 Resource not accessible by personal
+      # access token"). A maintainer without push access (the exact,
+      # expected use case for a non-codeowner running this profile) can't
+      # use lockdown mode at all — it fails closed on every PR read, not
+      # just on filtering. It was already documented as "best-effort
+      # content filter, not an authorization boundary" — (1)/(2)/(3) above
+      # are the real controls — so losing it costs a heuristic, not
+      # security.
+      GITHUB_LOCKDOWN_MODE: "0"
       # `all` on purpose: GITHUB_EXCLUDE_TOOLS below is the real gate, and
       # naming toolset *groups* here instead risks silently missing a tool
       # this profile needs (verified live: the default toolset omits
@@ -79,6 +88,15 @@ mcp_servers:
         repository_ruleset_read,search_commits,search_orgs,
         search_repositories,search_users,star_repository,sub_issue_write,
         unstar_repository,update_gist,update_pull_request
+    # Verified live, not assumed: sent two overlapping in-flight tools/call
+    # requests over this exact container's stdio and got both back
+    # correctly id-matched, out of submission order — real concurrent
+    # handling, not a single-threaded queue. Without this, Hermes rejects a
+    # multi-call batch to a non-opted-in server outright ("a tool_call
+    # batch takes exactly one entry for a non-parallel-safe server") and
+    # every fetch serializes one round trip at a time — real, measured cost
+    # against a real queue (dozens of PRs).
+    supports_parallel_tool_calls: true
     tools:
       # PR queue reads — pull_request_read is one multiplexed tool (method:
       # get/get_diff/get_status/get_files/get_commits/get_reviews/
@@ -195,8 +213,24 @@ custom_toolsets:
   kyverno-assistant-tools:
     - mcp-github
     - mcp-slack
+    # kyverno-sequencer: a bundled plugin (plugins/kyverno-sequencer/), not an MCP server.
+    # Registers one tool, sequence_prs — a pure function over already-fetched PR metadata, no
+    # GitHub/Slack access of its own. See docs/architecture.md for the packaging verification.
+    - kyverno-sequencer
 
 toolsets: ["kyverno-assistant-tools"]
+
+# `toolsets:` only scopes MCP tool grants. Hermes' built-in tools (terminal,
+# file, browser, code_execution, etc.) ship enabled by default regardless —
+# this is the real control for those. See docs/architecture.md.
+platform_toolsets:
+  cli:
+    - memory
+    - skills
+    - todo
+    - session_search
+    - clarify
+    - cronjob
 
 hooks:
   pre_tool_call:
@@ -238,7 +272,21 @@ memory:
   # verified live, not assumed from the plugin's own docs.
   write_approval: true
 
+# Hermes' agent-side "curator" can write new skills on its own mid-session
+# (skill_manage) — found live: it authored a skill of its own accord in an
+# earlier session and used it during real testing, bypassing the toolset
+# allowlist above entirely (skill_manage is a core tool, not MCP/plugin —
+# not subject to custom_toolsets/toolsets). Same gate as memory.write_approval
+# above: every mutation staged for the maintainer instead of applied
+# silently, plus a scan on anything agent-authored.
+skills:
+  write_approval: true
+  guard_agent_created: true
+
 plugins:
   enabled:
     - mnemosyne
+    # kyverno-sequencer: bundled at plugins/kyverno-sequencer/ (not the community catalog like
+    # mnemosyne) — installed as part of this repo, not a separate `hermes plugins install`.
+    - kyverno-sequencer
 agent: {}

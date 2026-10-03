@@ -110,6 +110,30 @@ question needs it (citing what it found, not guessing), then drafts a
 reply and shows it to you — posting only once you confirm, since a
 discussion answer is visible to the whole community, not just you.
 
+## Remembering things across sessions
+
+> **You:** explain PR #4200
+
+Post-merge risk isn't just "no path-to-suite mapping exists" — if the
+package combination it touches has broken the post-merge suite before,
+that's cited by PR number and date, not just flagged as a blind spot.
+
+> **You:** is anything else related to #4181?
+
+Checks closed and rejected PRs too, with why they didn't land — not just
+what's currently open.
+
+> **You:** remember that dependency bumps to logging libraries need extra
+> scrutiny — they've caused problems before
+
+Kept as a durable fact, retrieved automatically the next time a similar PR
+comes up — not something you have to repeat every session.
+
+It also picks up on real, repeated patterns on its own — a contributor who
+consistently needs a second round on generated-file changes, a standing
+policy stated once in Slack — and factors that in before drafting a review
+brief or a discussion reply, without being asked to remember it.
+
 ## A standing review digest, without asking every time
 
 A scheduled job ships with the profile (`cron/jobs.json`) — weekday
@@ -120,6 +144,12 @@ kyverno-review-digest` turns it on, and `hermes cron edit
 kyverno-review-digest --schedule "..."` changes the timing. Each run
 remembers its own last output, so the digest says what changed rather than
 repeating the whole list every morning.
+
+Two more scheduled jobs ship alongside it, also paused by default and
+silent unless they find something: one checks every few days for PRs that
+closed unmerged or post-merge breakage that just happened, and remembers
+the reason when one's known; the other periodically compresses what's
+been remembered so far into more useful, distilled patterns.
 
 ## Taking action, with your own credentials
 
@@ -176,3 +206,9 @@ won't regenerate now-stale generated files.
   posting to the maintainers channel) are two independent integrations that
   happen to share a bot token — see `docs/architecture.md` if you're
   debugging one without the other.
+- Remembers durably across sessions — current focus and working style in a
+  compact always-loaded profile, and an accumulating knowledge store for
+  things like past incidents, rejected PRs, and contributor patterns that
+  would outgrow that. Live GitHub/Slack state (open PRs, current labels,
+  recent messages) is always looked up fresh, never memorized — it would
+  go stale the moment anything changed.

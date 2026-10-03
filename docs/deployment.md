@@ -19,9 +19,16 @@ arguments."
 separately, install from a local checkout instead: `hermes profile install .
 --name kyverno --alias -y`.)
 
-This prompts for the env vars listed in `distribution.yaml`'s `env_requires` and
-writes them to the installed profile's `.env` (`~/.hermes/profiles/kyverno/.env`
-— separate from this repo, never committed):
+`./scripts/install.sh` runs this plus everything else below (gateway,
+sanity checks) and is the recommended path — see the README's Setup
+section. What follows here is what it's actually doing, for reference or
+manual use.
+
+`hermes profile install` does **not** prompt for or write any env vars —
+live-verified against a clean environment: it just installs the profile
+and tells you to copy `.env.EXAMPLE` to `.env`
+(`~/.hermes/profiles/kyverno/.env` — separate from this repo, never
+committed) and fill in these yourself:
 
 - `GITHUB_TOKEN` — fine-grained PAT: Contents Read, Pull requests Read & Write,
   Issues Read & Write, Checks Read, Code scanning alerts Read, Dependabot
@@ -68,8 +75,9 @@ Talking to it on Slack needs one more thing `kyverno chat` doesn't cover:
 Hermes runs exactly one gateway *per host* (not per profile) as the inbound
 process for every profile's messaging platforms — `kyverno chat` only starts
 a foreground CLI session, it doesn't make the gateway listen for Slack
-mentions. Install the host gateway once, from the `default` profile (it
-serves every profile, including this one):
+mentions. `scripts/install.sh` does this automatically when Slack
+credentials are present in `.env`; by hand, install the host gateway once,
+from the `default` profile (it serves every profile, including this one):
 
 ```bash
 hermes profile use default
@@ -100,8 +108,9 @@ confirm the queue reasoning (stacked PRs, generated-file conflicts, post-merge
 CI risk) matches what they'd conclude by hand. Only after that is v2 (merge,
 gated per the archived kyctrl pattern) worth building.
 
-`skills/` is written (four skills — see README). After installing, check
-the toolset matches `config.yaml`:
+`skills/` is written (four skills — see README). `scripts/install.sh`
+already runs the checks below; by hand, confirm the toolset matches
+`config.yaml`:
 
 ```bash
 hermes mcp list

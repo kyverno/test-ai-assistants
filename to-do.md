@@ -20,3 +20,8 @@
 
 - shared MEMORY using some hermes cloud memory extension like mem0.
 - local memory can be extended using "mnemosyne"
+
+
+- add stale pr label
+- fix the coderabbit approved thing , it should not allow maintainers to merge too
+- 

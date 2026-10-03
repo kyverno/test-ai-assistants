@@ -71,44 +71,30 @@ can't see or act on a channel in a different one.
    app** on the OAuth & Permissions page — scope changes need that to take
    effect.
 
-### 5. Install the profile
+### 5. Install everything else
 
 ```bash
-hermes profile install . --name kyverno --alias -y
+./scripts/install.sh
 ```
 
-This prompts for every env var `distribution.yaml` requires and writes them
-to `~/.hermes/profiles/kyverno/.env`: your GitHub token,
-`MAINTAINER_GITHUB_LOGIN` (your GitHub username), `KYVERNO_REPO`
-(`owner/repo`), your Anthropic key, and — if you did step 4 — the four
-Slack values. Full detail on each var: `docs/deployment.md`.
+One script, re-run as many times as you need — it detects what's already
+done and only does what's left:
 
-### 6. Start the messaging gateway (Slack only)
+- First run installs the profile, then stops and tells you exactly which
+  credentials to fill in at `~/.hermes/profiles/kyverno/.env` (copied
+  there from `.env.EXAMPLE`): your GitHub token, `MAINTAINER_GITHUB_LOGIN`,
+  `KYVERNO_REPO`, your Anthropic key, and — if you did step 4 — the four
+  Slack values. Full detail on each var: `docs/deployment.md`.
+- Fill those in, then run `./scripts/install.sh` again. It installs the
+  messaging gateway (only if you set up Slack), then sanity-checks the
+  toolset — GitHub/Slack MCP servers reachable, hooks approved — and
+  prints ✓/✗ per check.
 
-Talking to the bot in Slack needs Hermes' gateway process running —
-`kyverno chat` alone doesn't start it. Hermes runs one gateway per machine,
-shared across every profile, installed from the `default` profile:
+`hermes profile install` itself has no non-interactive way to accept
+credentials — pasting real values into `.env` once is the one manual step
+nothing here can skip.
 
-```bash
-hermes profile use default
-hermes gateway install
-hermes gateway status
-```
-
-`tail ~/.hermes/logs/gateway.log` should show a line naming your profile
-connected to Slack.
-
-### 7. Sanity-check the toolset
-
-```bash
-hermes profile use kyverno
-hermes mcp list          # github and slack should both show "enabled"
-hermes mcp test github
-hermes mcp test slack    # only if you set up Slack
-hermes hooks doctor
-```
-
-### 8. Run it
+### 6. Run it
 
 ```bash
 kyverno chat
@@ -116,7 +102,7 @@ kyverno chat
 
 or mention the bot in the Slack channel you invited it to.
 
-### 9. Turn on the review digest (optional)
+### 7. Turn on the review digest (optional)
 
 A scheduled job ships with the profile — a weekday-morning merge-sequence
 digest posted to your Slack channel — but arrives paused, since a
@@ -157,18 +143,38 @@ when a maintainer asks to "rebase"; see that skill for why.
 **Cannot merge** — no merge tool exists in its toolset, enforced in three
 independent layers. See `docs/architecture.md`.
 
+Remembers durably across sessions — current focus and working style, plus
+an accumulating store of past incidents, rejected PRs, and contributor
+patterns, retrieved automatically where relevant (e.g. flagging post-merge
+risk with real cited history, not just "no data"). See
+`docs/capabilities.md`'s "Remembering things across sessions".
+
 ## Layout
 
 - `distribution.yaml` — install manifest: name, version, required env vars.
+- `scripts/install.sh` — idempotent installer: `ortools` (for
+  `sequence_prs`'s CP-SAT solver), profile install, credential check,
+  gateway install, toolset sanity checks. Re-run after each step it asks
+  for (see Setup step 5).
 - `SOUL.md` — the agent's identity and boundaries.
 - `config.yaml` — model default, the GitHub/Slack MCP server declarations
   (`mcp_servers:`), and the hand-picked tool allowlist. Security-critical,
   hand-edited only.
 - `hooks/block-dangerous-tools.sh` — a `pre_tool_call` backstop that rejects
   any merge/delete-repo/force-push-shaped tool call.
-- `cron/jobs.json` — scheduled jobs the distribution ships (currently: a
-  weekday review digest posted to Slack). Installed paused; the maintainer
-  reviews and resumes it (see Setup step 9).
+- `hooks/block-mnemosyne-triples.sh` — a `pre_tool_call` backstop that
+  restricts the memory plugin's `triple_add` tool to the exact set of facts
+  this distribution actually writes.
+- `plugins/kyverno-sequencer/` — a bundled Hermes plugin (not a skill),
+  registering `sequence_prs`: deterministic candidate merge-sequencing —
+  file-risk classification, a hard-precedence graph, cycle detection, and a
+  weighted CP-SAT rank solve — that `pr-queue` calls and then checks
+  against context the tool can't see. See `docs/architecture.md`.
+- `cron/jobs.json` — scheduled jobs the distribution ships: a weekday
+  review digest posted to Slack, and two silent background jobs that keep
+  memory current (`kyverno-memory-sweep`, `kyverno-memory-consolidate`).
+  Installed paused; the maintainer reviews and resumes each one (see Setup
+  step 7).
 - `skills/kyverno-context/` — dynamically-resolved labels/CODEOWNERS
   (never hardcoded — re-resolved live every session) plus Kyverno's real
   codegen fan-out and pre-/post-merge CI split, and on-demand doc lookup

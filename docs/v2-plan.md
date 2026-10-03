@@ -144,6 +144,20 @@ from. Until then, extend the existing three skills:
 
 ## Phase 1 — Merge-sequence recommendation (buildable now, no new toolset)
 
+**Implemented:** the classification/graph/cycle-detection/ordering arithmetic
+described below now runs in `plugins/kyverno-sequencer/` (tool `sequence_prs`),
+a bundled Hermes plugin, not agent reasoning — see `docs/architecture.md`
+("How `sequence_prs` ships and why it uses CP-SAT") for the packaging
+verification and the CP-SAT-vs-stdlib reasoning. The soft-priority side
+(milestone/age/size/e2e-gate-risk/review-readiness) is a weighted CP-SAT
+solve, not the lexicographic tie-break this section originally described —
+a genuine strengthening after review, not a simplification. What stays
+agent-driven: fetching the candidate metadata, diagnosing `needs-review`
+causes, `search_code`-derived interface/dependency-usage edges (passed to
+the tool as `precedence_hints`), the Slack cross-check, and the final
+presented recommendation — the tool's output is a candidate, never a
+verdict (`skills/pr-queue/SKILL.md`'s Procedure has the current shape).
+
 **What kyverno/kyverno#17698 actually does** (read directly from the real
 workflow YAML on the PR's branch, not just its description — re-verify
 per step 1 above before trusting this section, since the PR may still

@@ -1,0 +1,7 @@
+name: kyverno-sequencer
+version: 0.1.0
+description: "Deterministic PR merge-sequencing: file-risk classification, a hard-precedence graph (stacked / generated-file / interface / dependency-usage edges), cycle detection, and a weighted CP-SAT rank solve (milestone urgency, age, size, e2e-gate risk, review-readiness) with a stdlib greedy fallback when OR-tools isn't installed. Called by the pr-queue skill; never calls GitHub/Slack itself — takes already-fetched PR metadata, returns a candidate order."
+author: "Suhaani Agarwal"
+license: "MIT"
+provides_tools:
+  - sequence_prs

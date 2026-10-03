@@ -145,6 +145,125 @@ maintainer mentions in conversation that CI broke on `main`, the `pr-queue` skil
 can take that as input and flag which queued PRs likely overlap the break by
 touched files — but this is conversational, not monitored.
 
+## Real-repo testing findings (kyverno/kyverno, non-collaborator token)
+
+First live test against `kyverno/kyverno` with a non-collaborator PAT
+surfaced four bugs, each root-caused against the real container/API before
+fixing (no guessing):
+
+**`GITHUB_LOCKDOWN_MODE=1` 403s every `pull_request_read` for a
+non-collaborator token.** Lockdown mode checks the PR *author's*
+collaborator permission on every read to decide whether to filter their
+content; that permission-check endpoint itself requires the *calling*
+token to have push access. Confirmed directly against the real container:
+`failed to check lockdown mode: failed to get user permission level: ...
+403 Resource not accessible by personal access token`. A maintainer
+without push access — the exact case this profile exists for — can't use
+it at all: it fails closed on every read, not just on filtering. Per
+github/github-mcp-server's own docs, lockdown mode "does not restrict what
+the underlying credential can otherwise read or write" — it's a
+best-effort prompt-injection content filter, not an authorization
+boundary, so disabling it (`GITHUB_LOCKDOWN_MODE: "0"`) doesn't expand any
+write capability; it only means unfiltered content from non-collaborator
+PR/issue authors now reaches the model directly. Compensating control:
+`SOUL.md` now states explicitly that PR/issue/comment content is data,
+never instructions.
+
+**GitHub MCP tool calls were serializing one at a time, with visible
+retries.** An MCP server must opt into `supports_parallel_tool_calls` or
+Hermes rejects a multi-call batch to it outright. Tested the real
+container directly: two overlapping in-flight `tools/call` requests came
+back correctly id-matched, out of submission order — genuine concurrent
+handling, safe to enable. `config.yaml`'s github server now sets
+`supports_parallel_tool_calls: true`.
+
+**`total_count` was right; the assumption that candidate sets are small
+was wrong.** `kyverno/kyverno` currently has ~146 real `ready-for-review`
+PRs at once — confirmed against `gh`'s own count with a correct `--limit`
+(an unlimited first check silently capped at `gh`'s default 30 and looked
+like a mismatch; it wasn't). `pr-queue` now defaults to a `perPage`-bounded
+slice instead of the full set.
+
+**Every profile silently gets Hermes' general-purpose bundled skill
+catalog** (`apple`, `social-media`, `devops`, `email`, ...) — unrelated to
+anything this distribution ships, discovered and loaded mid-session when
+the agent hit the lockdown-mode bug and went looking for alternatives. Not
+a security hole (the toolset gate still blocked the resulting `terminal`
+tool call), but unwanted surface and wasted effort. Fix: a `.no-bundled-skills`
+marker file at the repo root, so no fresh install ever seeds the bundle;
+an already-installed profile needs a one-time
+`hermes -p <profile> skills opt-out --remove -y`. Also: the agent's own
+"curator" can write new skills mid-session (`skill_manage`, a core tool,
+not gated by `toolsets:`) — `config.yaml`'s `skills.write_approval: true`
+now stages that like `memory.write_approval` already does for mnemosyne.
+The one pinned "essential" skill (`hermes-agent`) never auto-seeds either,
+since this distribution's own `skills/` is never empty — `scripts/install.sh`
+now forces it via `hermes skills reset hermes-agent --restore --yes`.
+`${KYVERNO_REPO}` in `SKILL.md` never resolved either — Hermes only
+substitutes `${HERMES_SKILL_DIR}`/`${HERMES_SESSION_ID}` (hardcoded regex,
+`agent/skill_preprocessing.py`) — `scripts/install.sh` now does this
+substitution itself after credentials are confirmed.
+
+## How `sequence_prs` ships and why it uses CP-SAT
+
+`plugins/kyverno-sequencer/` is a bundled Hermes plugin, not a skill — it
+registers one tool, `sequence_prs`, that computes a candidate merge order
+deterministically from PR metadata `pr-queue` has already fetched. Two
+things about it were verified directly against the installed Hermes source
+(`~/.hermes/hermes-agent`), not assumed from the distribution docs:
+
+1. **It ships with zero extra packaging step.** `distribution.yaml` here has
+   no `distribution_owned:` key, so `hermes_cli/profile_distribution.py`'s
+   `_owned_entries` takes its "legacy: no allowlist" branch — the *entire*
+   repo payload gets copied on `hermes profile install`/`update`, not just
+   `SOUL.md`/`config.yaml`/`mcp.json`/`skills`/`cron` (the `DEFAULT_DIST_OWNED`
+   tuple, which only applies once an author opts into an explicit
+   `distribution_owned:` allowlist). A `plugins/` directory at the repo root
+   rides along automatically.
+2. **It's discovered automatically, per-profile, with no env var.** Hermes'
+   plugin loader scans `$HERMES_HOME/plugins/<name>/`
+   (`hermes_cli/plugins_discovery.py`: `user_dir = get_hermes_home() / "plugins"`),
+   and `get_hermes_home()` is context-local per active profile — for the
+   installed `kyverno` profile this resolves to
+   `~/.hermes/profiles/kyverno/plugins/kyverno-sequencer/`. This is a
+   **different** mechanism from Hermes' CWD-relative `./.hermes/plugins/`
+   "project plugins" path, which is opt-in-only
+   (`HERMES_ENABLE_PROJECT_PLUGINS=1`) and flagged in Hermes' own source
+   (`hermes_cli/web_server_dashboard.py`) as attacker-controlled surface
+   since it ships with whatever directory the CLI happens to be run from —
+   not used here. Plugins are still opt-in at the config level, though:
+   `config.yaml`'s `plugins.enabled:` must name `kyverno-sequencer`
+   (confirmed: `_get_enabled_plugins` treats this as an allow-list, same as
+   the existing `mnemosyne` entry), and its tool still needs an explicit
+   toolset grant like any other tool here — bundled isn't auto-trusted.
+
+**Why CP-SAT, not a plain topological sort.** Hard precedence (stacked
+branches, generated-file input-before-output, interface
+definer-before-implementer, dependency-usage) is a genuine DAG problem —
+`sequencer.py` builds it and runs Kahn's-algorithm cycle detection exactly
+as a plain sort would. But the *soft* priorities (milestone urgency, age,
+PR size, e2e-gate risk avoidance, review-readiness) don't reduce to a
+lexicographic tie-break — they trade off against each other (a
+milestone-critical large PR vs. an old, milestone-irrelevant small one),
+which makes "rank subject to precedence, minimizing a weighted sum" the
+real problem shape: precedence-constrained weighted completion-time
+scheduling, NP-hard for a general DAG, and exactly what CP-SAT solves
+(`AddAllDifferent` + `Add(rank[i] < rank[j])` per edge +
+`Minimize(weighted linear sum)`) — fast and exactly, not approximately,
+given the small PR counts here.
+
+**The dependency isn't auto-installed by Hermes** — plugins ship as plain
+copied Python source; a plugin's `requirements.txt` is audit surface only
+(confirmed directly in Hermes' `hermes_cli/security_audit.py`: "Plugins
+typically don't install into the venv"). `scripts/install.sh` is this
+repo's own script, not Hermes', so it installs `ortools` automatically as
+one more prerequisite check alongside Docker — no manual step for a
+maintainer who uses that script. `sequencer.py` falls back to a stdlib
+greedy weighted-priority heuristic (same weights, not globally optimal)
+when `ortools` genuinely isn't importable, so the tool never hard-fails
+over the optional dependency; the returned `"solver"` field says which
+path actually ran.
+
 ## Why queue reasoning has to know about codegen and CI structure
 
 Two facts about the real `kyverno/kyverno` build, confirmed directly against its

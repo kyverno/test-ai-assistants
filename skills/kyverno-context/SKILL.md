@@ -215,6 +215,13 @@ A file can be unclassified (touches none of the above) — that's the common
 case, not an error; it just means file-overlap conflict detection (plain
 path intersection) is the only signal for that file, no risk tier attached.
 
+The generated/generated-input/test-only patterns above are also encoded in
+`plugins/kyverno-sequencer/sequencer.py` (`sequence_prs`, used by
+`pr-queue` to compute the candidate merge order) — kept in sync manually.
+Re-verify both if Kyverno's generated-path list ever changes; the interface
+tier isn't mirrored there since direction requires reading diffs, not just
+path patterns (`pr-queue` supplies those edges as `precedence_hints`).
+
 ## Reference: readiness-label taxonomy (from `.github/labels.yml`)
 
 - `ready-for-review` — clean: DCO/CI/conflicts (+ review threads for human
@@ -236,6 +243,16 @@ This is real ground truth for what the taxonomy looks like, kept here as
 context — it does **not** change step 1's live-resolution rule below.
 `list_label` is still called every session; don't assume a name from this
 list is present without having seen it in that call.
+
+## Reference: finding milestone-focused PRs
+
+No tool lists issues/PRs by milestone (checked every tool's full schema,
+not just names — `issue_write`'s `milestone` param only *sets* a number).
+Use the `milestone-pr` label instead: `label:milestone-pr` on
+`search_pull_requests` finds PRs solving a milestone issue directly. For
+which milestone/version a specific one targets, read its closing issue
+(`issue_read`) and that issue's `milestone` field — don't guess a
+`milestone:"..."` query string.
 
 ## Pitfalls
 
