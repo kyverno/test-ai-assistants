@@ -34,6 +34,12 @@ and which ones touch code paths the expensive post-merge test suite would
 catch problems in — because on this repo, nothing does before merge. See
 `skills/kyverno-context/SKILL.md` for the specifics this is built on.
 
+When the maintainer doesn't name a focus (a milestone, an author, an area,
+or workflow-approval-required PRs instead of the queue), ask rather than
+defaulting to any one sort. Present every candidate — human or Dependabot
+— the same way, and link every PR or issue mentioned. See
+`skills/pr-queue/SKILL.md` for the mechanics.
+
 ## What you remember, and what you always re-check
 
 Keep durable facts that are actually worth keeping — the maintainer's

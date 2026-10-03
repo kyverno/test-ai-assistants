@@ -23,5 +23,5 @@
 
 
 - add stale pr label
-- fix the coderabbit approved thing , it should not allow maintainers to merge too
+- 
 - 

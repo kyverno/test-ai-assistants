@@ -1,32 +1,44 @@
-"""Deterministic PR merge-sequencing core.
+"""Deterministic PR merge-sequencing core: a graph builder, not a decision maker.
 
-Pure computation over already-fetched PR metadata — no GitHub/Slack calls, no state. Two kinds
-of ordering signal, kept structurally separate:
+Pure computation over already-fetched PR metadata — no GitHub/Slack calls, no state.
 
-1. Hard precedence edges: some computed here mechanically from changed-file classification
-   (stacked branches, generated-file input-before-output), some supplied by the caller as
-   `precedence_hints` (interface definer-before-implementer, dependency-usage) because those
-   genuinely require reading diffs / call-site search that this module has no access to — see
-   skills/pr-queue/SKILL.md's Procedure. Either way, once an edge exists it's treated the same:
-   fed into cycle detection and the solver as a hard constraint.
-2. Soft priorities (milestone urgency, age, size, e2e-gate risk, review-readiness): blended into
-   one weighted objective and solved for optimally with CP-SAT (falls back to a greedy
-   weighted-priority heuristic if `ortools` isn't installed) rather than a lexicographic
-   tie-break, since these factors genuinely trade off against each other.
+Design: the sequencer only owns structural facts — hard dependencies, cycles, a topological
+layering into tiers, and a few mechanically-derived annotations. Ordering *within* a tier
+(two PRs with no real dependency between them) is a genuine judgment call — Slack context,
+what the maintainer said last session, what they're trying to get done today — and belongs to
+the agent, not a weighted formula pretending to resolve it. See skills/pr-queue/SKILL.md's
+Procedure for how tiers and annotations get used.
+
+Four hard-edge types, all mechanically derivable from already-fetched metadata — no caller-
+supplied hints needed:
+
+1. Stacked branches (`base_branch` is another candidate's `head_branch`).
+2. Generated-file input-before-output (a candidate touching an `api/**/*_types.go` path or a
+   `github.com/kyverno/api` bump must precede one touching the regenerated output it feeds).
+3. Explicit body reference — the PR's own body says "Depends on #N" / "Blocked by #N" /
+   "Requires #N" / "Stacked on #N" naming another candidate.
+4. Closing-issue conflict — two candidates closing the *same* issue aren't ordered against
+   each other at all; only one can actually close it, so this goes to `unresolved[]` for a
+   human, not a guessed edge.
+
+Interface-direction and dependency-usage edges (approximating "which PR's diff implies which
+other PR must come first" from a search rather than a real call graph) are deliberately not
+attempted here — see docs/v3-plan.md's gopls-integration entry for the real version of that.
 
 File-risk classification patterns below are a code mirror of
-skills/kyverno-context/SKILL.md's "Reference: file-risk classification vocabulary" and codegen
-fan-out sections. Keep both in sync manually if Kyverno's generated-path list changes.
+skills/kyverno-context/SKILL.md's file-risk classification reference. Keep both in sync
+manually if Kyverno's generated-path list changes.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import os
+import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Optional
 
-# --- file-risk classification (mirror of kyverno-context SKILL.md) --------------------------
+# --- file classification ---------------------------------------------------------------------
 
 GENERATED_GLOB_PATTERNS = [
     "zz_generated.deepcopy.go",
@@ -44,16 +56,21 @@ GENERATED_GLOB_PATTERNS = [
     "config/install-latest-testing.yaml",
 ]
 
-# The one documented hand-written exception inside an otherwise-generated directory
-# (kyverno-context: "pkg/clients/dclient's hand-written client.go is the one real exception").
+# The one documented hand-written exception inside an otherwise-generated directory.
 GENERATED_EXCEPTIONS = {"pkg/clients/dclient/client.go"}
 
-# Generated-file *inputs*, in this repo. The external-module equivalent (a go.mod/go.sum bump
-# of github.com/kyverno/api) is checked separately via `dependency_bumps`, not a file path.
+API_SURFACE_GLOB_PATTERNS = ["api/kyverno/*", "api/policyreport/*", "api/reports/*"]
+ADMISSION_CRITICAL_GLOB_PATTERNS = ["pkg/engine/*", "pkg/webhooks/*", "pkg/cel/*"]
+TEST_ONLY_GLOB_PATTERNS = ["*_test.go", "test/*"]
+
+# Generated-file *inputs* — distinct from the API_SURFACE display tier above: this drives
+# edge-building (input-before-output), not what gets shown to the maintainer.
 GENERATED_INPUT_GLOB_PATTERNS = ["api/*_types.go"]
 GENERATED_INPUT_DEPENDENCY_MODULE = "github.com/kyverno/api"
 
-TEST_ONLY_GLOB_PATTERNS = ["*_test.go", "test/*"]
+_CROSS_REF_PATTERN = re.compile(
+    r"\b(?:depends on|blocked by|requires|stacked on)\s+#(\d+)", re.IGNORECASE
+)
 
 
 def _norm(pattern: str) -> str:
@@ -66,23 +83,24 @@ def _match_any(path: str, patterns: list[str]) -> bool:
 
 
 def classify_file(path: str) -> str:
-    """'generated' | 'generated_input' | 'test' | 'unclassified'.
-
-    Generated is checked first — a path can look like anything else while actually being
-    generated output (kyverno-context: "Generated takes precedence ... when a path matches
-    both"). Interface classification isn't attempted here: direction between an interface's
-    definer and implementer needs diff content, not a path list — see `precedence_hints`.
-    """
+    """'GENERATED' | 'API_SURFACE' | 'ADMISSION_CRITICAL' | 'TEST_ONLY' | 'STANDARD', checked
+    in that priority order — a file can match more than one tier's glob (e.g. a test file
+    under pkg/engine/), and the higher-priority tier wins."""
     if path not in GENERATED_EXCEPTIONS and _match_any(path, GENERATED_GLOB_PATTERNS):
-        return "generated"
-    if _match_any(path, GENERATED_INPUT_GLOB_PATTERNS):
-        return "generated_input"
+        return "GENERATED"
+    if _match_any(path, API_SURFACE_GLOB_PATTERNS):
+        return "API_SURFACE"
+    if _match_any(path, ADMISSION_CRITICAL_GLOB_PATTERNS):
+        return "ADMISSION_CRITICAL"
     if _match_any(path, TEST_ONLY_GLOB_PATTERNS):
-        return "test"
-    return "unclassified"
+        return "TEST_ONLY"
+    return "STANDARD"
 
 
-# --- PR model ---------------------------------------------------------------------------------
+_TIER_RANK = {"GENERATED": 0, "API_SURFACE": 1, "ADMISSION_CRITICAL": 2, "TEST_ONLY": 3, "STANDARD": 4}
+
+
+# --- PR model ---------------------------------------------------------------------------
 
 @dataclass
 class PR:
@@ -91,22 +109,9 @@ class PR:
     labels: list[str] = field(default_factory=list)
     base_branch: str = ""
     head_branch: str = ""
-    milestone_alignment: str = "none"  # "direct" | "referenced" | "none"
-    created_at: Optional[str] = None
+    body: str = ""
+    closing_issues: list[int] = field(default_factory=list)
     dependency_bumps: list[str] = field(default_factory=list)
-    coderabbit_approved: bool = False
-    unresolved_review_threads: int = 0
-    touches_failing_gate_path: bool = False
-
-    @property
-    def age_days(self) -> float:
-        if not self.created_at:
-            return 0.0
-        try:
-            created = datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
-        except ValueError:
-            return 0.0
-        return max(0.0, (datetime.now(timezone.utc) - created).total_seconds() / 86400.0)
 
     @property
     def size(self) -> int:
@@ -114,13 +119,18 @@ class PR:
 
     def is_generated_input(self) -> bool:
         return (GENERATED_INPUT_DEPENDENCY_MODULE in self.dependency_bumps
-                or any(classify_file(f) == "generated_input" for f in self.changed_files))
+                or any(_match_any(f, GENERATED_INPUT_GLOB_PATTERNS) for f in self.changed_files))
 
     def is_generated_output_toucher(self) -> bool:
-        return any(classify_file(f) == "generated" for f in self.changed_files)
+        return any(classify_file(f) == "GENERATED" for f in self.changed_files)
 
-    def is_review_ready(self) -> bool:
-        return self.coderabbit_approved and self.unresolved_review_threads == 0
+    def has_bypass_label(self) -> bool:
+        return "e2e-gate-bypass" in self.labels
+
+    def file_classification(self) -> str:
+        if not self.changed_files:
+            return "STANDARD"
+        return min((classify_file(f) for f in self.changed_files), key=lambda t: _TIER_RANK[t])
 
 
 def pr_from_dict(d: dict) -> PR:
@@ -130,32 +140,37 @@ def pr_from_dict(d: dict) -> PR:
         labels=list(d.get("labels") or []),
         base_branch=str(d.get("base_branch") or ""),
         head_branch=str(d.get("head_branch") or ""),
-        milestone_alignment=str(d.get("milestone_alignment") or "none"),
-        created_at=d.get("created_at"),
+        body=str(d.get("body") or ""),
+        closing_issues=list(d.get("closing_issues") or []),
         dependency_bumps=list(d.get("dependency_bumps") or []),
-        coderabbit_approved=bool(d.get("coderabbit_approved", False)),
-        unresolved_review_threads=int(d.get("unresolved_review_threads", 0)),
-        touches_failing_gate_path=bool(d.get("touches_failing_gate_path", False)),
     )
 
 
 # --- hard-edge graph ----------------------------------------------------------------------
 
-def build_mechanical_edges(prs: list[PR], repo_default_branch: str) -> tuple[list[tuple[int, int]], list[dict]]:
-    """Edges this module can derive purely from provided metadata (no diff-reading needed):
-    stacked branches, and generated-input-before-output. Returns (edges, unresolved_notes) —
-    an edge is (before, after); unresolved_notes covers pairs with no derivable direction."""
-    edges: list[tuple[int, int]] = []
+def build_hard_edges(prs: list[PR], repo_default_branch: str) -> tuple[list[tuple[int, int, str]], list[dict]]:
+    """Returns (edges, unresolved) — an edge is (before, after, kind); unresolved covers pairs
+    with no derivable direction (both inputs to the same generated output) or no direction at
+    all (a closing-issue conflict)."""
+    edges: list[tuple[int, int, str]] = []
     unresolved: list[dict] = []
+    by_number = {p.number: p for p in prs}
     by_head = {p.head_branch: p for p in prs if p.head_branch}
 
     for p in prs:
-        # Stacked: base is another candidate's head, and not the repo default branch.
+        # 1. Stacked.
         if p.base_branch and p.base_branch != repo_default_branch and p.base_branch in by_head:
             base_pr = by_head[p.base_branch]
             if base_pr.number != p.number:
-                edges.append((base_pr.number, p.number))
+                edges.append((base_pr.number, p.number, "stacked"))
 
+        # 3. Explicit body reference.
+        for match in _CROSS_REF_PATTERN.finditer(p.body):
+            ref = int(match.group(1))
+            if ref in by_number and ref != p.number:
+                edges.append((ref, p.number, "explicit reference"))
+
+    # 2. Generated-file input-before-output.
     input_only = [p for p in prs if p.is_generated_input() and not p.is_generated_output_toucher()]
     output_touchers = [p for p in prs if p.is_generated_output_toucher()]
     both_input = [p for p in prs if p.is_generated_input() and p.is_generated_output_toucher()]
@@ -163,10 +178,8 @@ def build_mechanical_edges(prs: list[PR], repo_default_branch: str) -> tuple[lis
     for a in input_only:
         for b in output_touchers:
             if a.number != b.number:
-                edges.append((a.number, b.number))
+                edges.append((a.number, b.number, "generated-file"))
 
-    # Two candidates that both touch a generated-file input feed the same regenerated output
-    # with no derivable order between them — flag for a human rather than guessing.
     all_inputs = input_only + both_input
     for i, a in enumerate(all_inputs):
         for b in all_inputs[i + 1:]:
@@ -176,29 +189,30 @@ def build_mechanical_edges(prs: list[PR], repo_default_branch: str) -> tuple[lis
                        "feeding the same regenerated output, with no derivable order between them",
             })
 
+    # 4. Closing-issue conflict.
+    by_issue: dict[int, list[int]] = {}
+    for p in prs:
+        for issue in p.closing_issues:
+            by_issue.setdefault(issue, []).append(p.number)
+    for issue, numbers in by_issue.items():
+        if len(numbers) > 1:
+            for i, a in enumerate(numbers):
+                for b in numbers[i + 1:]:
+                    unresolved.append({"prs": [a, b], "why": f"both close #{issue}"})
+
     return edges, unresolved
-
-
-def apply_bypass_pins(prs: list[PR], edges: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """e2e-gate-bypass PRs go first, unconditionally: a hard edge from every bypass PR to every
-    non-bypass PR."""
-    bypass = [p.number for p in prs if "e2e-gate-bypass" in p.labels]
-    if not bypass:
-        return edges
-    others = [p.number for p in prs if p.number not in bypass]
-    return edges + [(b, o) for b in bypass for o in others]
 
 
 # --- cycle detection (Kahn's algorithm) -----------------------------------------------------
 
 def find_cycles_and_acyclic_order_candidates(
-    numbers: list[int], edges: list[tuple[int, int]]
+    numbers: list[int], edges: list[tuple[int, int, str]]
 ) -> tuple[list[int], list[int]]:
     """Returns (acyclic_numbers, cyclic_numbers). Numbers left with unresolved in-degree after
     Kahn's algorithm drains everything it can are part of a cycle."""
     indeg = {n: 0 for n in numbers}
     succ: dict[int, list[int]] = {n: [] for n in numbers}
-    for a, b in edges:
+    for a, b, _kind in edges:
         if a in succ and b in indeg:
             succ[a].append(b)
             indeg[b] += 1
@@ -219,164 +233,129 @@ def find_cycles_and_acyclic_order_candidates(
     return seen, cyclic
 
 
-# --- weighted priority (soft factors) -------------------------------------------------------
+# --- topological layering into tiers --------------------------------------------------------
 
-W_MILESTONE_DIRECT = 5.0
-W_MILESTONE_REFERENCED = 2.0
-W_AGE_PER_DAY = 0.15
-W_SIZE = 3.0          # divided by (1 + size): smaller PRs score higher
-W_GATE_RISK = 4.0     # subtracted: push risky-while-red PRs later
-W_REVIEW_READY = 2.5  # added: CodeRabbit-approved + zero unresolved threads goes earlier
-
-
-def priority_weight(p: PR, gate_open: bool) -> float:
-    """Higher = should rank earlier. Used as the linear coefficient on `rank` in the
-    minimize-weighted-completion-time objective (higher-weight items are pushed to low ranks)."""
-    milestone_score = {"direct": W_MILESTONE_DIRECT, "referenced": W_MILESTONE_REFERENCED}.get(
-        p.milestone_alignment, 0.0
-    )
-    score = milestone_score + W_AGE_PER_DAY * p.age_days + W_SIZE / (1 + p.size)
-    if gate_open and p.touches_failing_gate_path:
-        score -= W_GATE_RISK
-    if p.is_review_ready():
-        score += W_REVIEW_READY
-    return score
-
-
-# --- solve: CP-SAT with a stdlib greedy fallback --------------------------------------------
-
-def _solve_cp_sat(prs: list[PR], edges: list[tuple[int, int]], weights: dict[int, float]) -> Optional[list[int]]:
-    try:
-        from ortools.sat.python import cp_model
-    except ImportError:
-        return None
-
-    n = len(prs)
-    if n == 0:
-        return []
-    model = cp_model.CpModel()
-    idx = {p.number: i for i, p in enumerate(prs)}
-    rank = [model.NewIntVar(0, n - 1, f"rank_{p.number}") for p in prs]
-    model.AddAllDifferent(rank)
-    for a, b in edges:
-        if a in idx and b in idx:
-            model.Add(rank[idx[a]] < rank[idx[b]])
-
-    # Scale float weights to integers for CP-SAT's linear objective.
-    scaled = {num: int(round(w * 1000)) for num, w in weights.items()}
-    model.Minimize(sum(scaled[p.number] * rank[idx[p.number]] for p in prs))
-
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 5
-    status = solver.Solve(model)
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return None
-    ordered = sorted(prs, key=lambda p: solver.Value(rank[idx[p.number]]))
-    return [p.number for p in ordered]
-
-
-def _solve_greedy(prs: list[PR], edges: list[tuple[int, int]], weights: dict[int, float]) -> list[int]:
-    """Weighted priority-list scheduling: at each step, among precedence-satisfied PRs, pick
-    the highest-weight one. Deterministic; not guaranteed globally optimal for the weighted
-    objective (that's what the CP-SAT path is for), but a real weighted blend, not a
-    lexicographic rule."""
-    numbers = [p.number for p in prs]
+def layer_into_tiers(numbers: list[int], edges: list[tuple[int, int, str]]) -> list[list[int]]:
+    """BFS-by-level topological sort: tier k holds every PR whose longest dependency chain
+    from any source is exactly k. Within a tier there is no hard edge between any two
+    members — the caller orders them, this function doesn't."""
     indeg = {n: 0 for n in numbers}
     succ: dict[int, list[int]] = {n: [] for n in numbers}
-    for a, b in edges:
+    for a, b, _kind in edges:
         if a in indeg and b in indeg:
             succ[a].append(b)
             indeg[b] += 1
 
-    available = [n for n in numbers if indeg[n] == 0]
-    order: list[int] = []
-    remaining_indeg = dict(indeg)
-    while available:
-        available.sort(key=lambda n: (-weights[n], n))
-        chosen = available.pop(0)
-        order.append(chosen)
-        for m in succ[chosen]:
-            remaining_indeg[m] -= 1
-            if remaining_indeg[m] == 0:
-                available.append(m)
-    return order
+    tiers: list[list[int]] = []
+    processed: set[int] = set()
+    layer = sorted(n for n in numbers if indeg[n] == 0)
+    while layer:
+        tiers.append(layer)
+        processed.update(layer)
+        next_layer: set[int] = set()
+        for n in layer:
+            for m in succ[n]:
+                indeg[m] -= 1
+                if indeg[m] == 0:
+                    next_layer.add(m)
+        layer = sorted(next_layer - processed)
+    return tiers
+
+
+# --- annotations ---------------------------------------------------------------------------
+
+def gate_blocked(p: PR, blocking_branches: set[str], blocks_all_branches: bool) -> bool:
+    """True when GitHub's own 'E2E Gate' status would currently be red on this PR: an open
+    e2e-failure issue's branch marker matches this PR's base (or an issue has no marker at
+    all, which blocks every branch) — unconditionally, regardless of which files the PR
+    touches. The only escape is the PR carrying e2e-gate-bypass itself."""
+    if p.has_bypass_label():
+        return False
+    return blocks_all_branches or p.base_branch in blocking_branches
+
+
+def find_package_overlaps(prs: list[PR], edges: list[tuple[int, int, str]]) -> list[dict]:
+    """Pairs of candidates touching the same directory with no existing hard edge between
+    them — a real elevated-review signal that would otherwise have to be noticed by eye."""
+    edge_pairs = {frozenset((a, b)) for a, b, _kind in edges}
+    dirs_by_pr = {
+        p.number: {os.path.dirname(f) for f in p.changed_files if classify_file(f) == "STANDARD"}
+        for p in prs
+    }
+    overlaps: list[dict] = []
+    for i, a in enumerate(prs):
+        for b in prs[i + 1:]:
+            if frozenset((a.number, b.number)) in edge_pairs:
+                continue
+            shared = sorted(d for d in (dirs_by_pr[a.number] & dirs_by_pr[b.number]) if d)
+            if shared:
+                overlaps.append({"prs": [a.number, b.number], "paths": shared[:3]})
+    return overlaps
 
 
 # --- top-level entry point -------------------------------------------------------------------
 
 def sequence(
     pr_dicts: list[dict],
-    precedence_hints: Optional[list[dict]] = None,
     repo_default_branch: str = "main",
-    gate_open: bool = False,
+    blocking_issue_branches: Optional[list[Optional[str]]] = None,
 ) -> dict[str, Any]:
     prs = [pr_from_dict(d) for d in pr_dicts]
     numbers = [p.number for p in prs]
     by_number = {p.number: p for p in prs}
 
-    mech_edges, unresolved = build_mechanical_edges(prs, repo_default_branch)
-    hint_edges = []
-    for hint in (precedence_hints or []):
-        before, after = hint.get("before"), hint.get("after")
-        if before in by_number and after in by_number:
-            hint_edges.append((before, after))
-    edges = apply_bypass_pins(prs, mech_edges + hint_edges)
+    branches = blocking_issue_branches or []
+    blocking_branches = {b for b in branches if b is not None}
+    blocks_all_branches = None in branches
+
+    edges, unresolved = build_hard_edges(prs, repo_default_branch)
 
     acyclic, cyclic = find_cycles_and_acyclic_order_candidates(numbers, edges)
     cyclic_set = set(cyclic)
     solved_prs = [p for p in prs if p.number not in cyclic_set]
-    solved_edges = [(a, b) for a, b in edges if a not in cyclic_set and b not in cyclic_set]
+    solved_edges = [(a, b, k) for a, b, k in edges if a not in cyclic_set and b not in cyclic_set]
+    solved_numbers = [p.number for p in solved_prs]
 
-    weights = {p.number: priority_weight(p, gate_open) for p in solved_prs}
-    order = _solve_cp_sat(solved_prs, solved_edges, weights)
-    solver_used = "cp-sat"
-    if order is None:
-        order = _solve_greedy(solved_prs, solved_edges, weights)
-        solver_used = "greedy-fallback"
+    tiers_numbers = layer_into_tiers(solved_numbers, solved_edges)
+    package_overlaps = find_package_overlaps(solved_prs, solved_edges)
 
-    bypass_numbers = {p.number for p in prs if "e2e-gate-bypass" in p.labels}
+    preds: dict[int, list[tuple[int, str]]] = {n: [] for n in solved_numbers}
+    succs: dict[int, list[tuple[int, str]]] = {n: [] for n in solved_numbers}
+    for a, b, kind in solved_edges:
+        preds[b].append((a, kind))
+        succs[a].append((b, kind))
 
-    sequence_out = []
-    for position, number in enumerate(order, start=1):
-        p = by_number[number]
-        reasons = []
-        if number in bypass_numbers:
-            reasons.append("carries e2e-gate-bypass — placed first unconditionally")
-        preds = [a for a, b in solved_edges if b == number]
-        bypass_preds = [a for a in preds if a in bypass_numbers]
-        other_preds = [a for a in preds if a not in bypass_numbers]
-        if bypass_preds:
-            reasons.append(f"must follow e2e-gate-bypass PR(s) {bypass_preds}")
-        if other_preds:
-            kinds = "stacked/generated-file" if any((a, number) in mech_edges for a in other_preds) else "precedence hint"
-            reasons.append(f"must follow PR(s) {other_preds} ({kinds})")
-        if p.milestone_alignment == "direct":
-            reasons.append("closes the target milestone issue directly")
-        elif p.milestone_alignment == "referenced":
-            reasons.append("closes an issue the milestone issue references")
-        if p.is_review_ready():
-            reasons.append("CodeRabbit-approved with no unresolved review threads")
-        if gate_open and p.touches_failing_gate_path:
-            reasons.append("touches a path the open e2e-gate failure names — elevated risk")
-        if not reasons:
-            reasons.append(f"age tiebreak ({p.age_days:.1f} days open)")
-
-        warnings = []
-        if gate_open and p.touches_failing_gate_path and number not in bypass_numbers:
-            warnings.append("e2e-gate is open and this PR touches an implicated path")
-
-        sequence_out.append({
-            "position": position,
-            "pr": number,
-            "reason": "; ".join(reasons),
-            "risk": "elevated" if (gate_open and p.touches_failing_gate_path) else "normal",
-            "warnings": warnings,
-        })
+    earlier_files: set[str] = set()
+    tiers_out = []
+    for tier_index, tier_numbers in enumerate(tiers_numbers, start=1):
+        tier_prs_out = []
+        for number in tier_numbers:
+            p = by_number[number]
+            hard_constraints = [f"must follow #{a} ({kind})" for a, kind in preds[number]]
+            hard_constraints += [f"must precede #{b} ({kind})" for b, kind in succs[number]]
+            rebase_flag = bool(set(p.changed_files) & earlier_files)
+            blocked = gate_blocked(p, blocking_branches, blocks_all_branches)
+            warnings = []
+            if blocked:
+                warnings.append("gate_blocked: an open e2e-failure issue blocks merging on this branch")
+            tier_prs_out.append({
+                "pr": number,
+                "hard_constraints": hard_constraints,
+                "rebase_flag": rebase_flag,
+                "warnings": warnings,
+                "gate_blocked": blocked,
+                "file_classification": p.file_classification(),
+            })
+        earlier_files |= {f for n in tier_numbers for f in by_number[n].changed_files}
+        tiers_out.append({"tier": tier_index, "prs": tier_prs_out})
 
     return {
-        "sequence": sequence_out,
+        "tiers": tiers_out,
         "cycles": [cyclic] if cyclic else [],
         "unresolved": unresolved,
-        "gate_status": {"open": gate_open},
-        "solver": solver_used,
+        "package_overlaps": package_overlaps,
+        "gate_status": {
+            "blocking_branches": sorted(blocking_branches),
+            "blocks_all_branches": blocks_all_branches,
+        },
     }

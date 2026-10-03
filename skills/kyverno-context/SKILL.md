@@ -1,7 +1,7 @@
 ---
 name: kyverno-context
-description: "Live labels/CODEOWNERS lookup; Kyverno's codegen & CI facts."
-version: 0.1.0
+description: "Live labels/CODEOWNERS/milestone lookup; Kyverno's codegen & CI facts."
+version: 0.3.0
 author: Suhaani Agarwal, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -9,372 +9,186 @@ platforms: [linux, macos, windows]
 
 # kyverno-context Skill
 
-Resolves two different kinds of knowledge `pr-queue` and `pr-actions` both
-depend on: `KYVERNO_REPO`'s actual label taxonomy and CODEOWNERS (looked up
-live, every session — never assumed), and Kyverno's real codegen fan-out and
-CI structure (fixed facts about the build system, documented here rather than
-re-derived every time). Does not read PR content itself — that's `pr-queue`.
+Two kinds of knowledge `pr-queue` and `pr-actions` both depend on: `KYVERNO_REPO`'s
+actual live state (labels, CODEOWNERS, milestones, release priority — looked up fresh
+every session, never assumed) and Kyverno's fixed codegen/CI facts (documented here,
+not re-derived every time). Does not read PR content itself — that's `pr-queue`.
 
 ## When to Use
 
-- Before filtering PRs by any label-based state (e.g. "is this ready for
-  review") — there is no fixed label vocabulary to assume.
+- Before filtering or scoring PRs by label/milestone/release-priority state.
 - Before labeling a PR (`pr-actions`) — to use a label that actually exists.
-- When deciding whether `MAINTAINER_GITHUB_LOGIN` is a requested reviewer for
-  a given changed path via CODEOWNERS, including team-based ownership.
-- Don't use for: reading a PR's own diff, reviews, or comments — `pr-queue`
-  calls those tools directly.
+- Before deciding whether `MAINTAINER_GITHUB_LOGIN` owns a changed path, via CODEOWNERS.
+- Not for: reading a PR's own diff, reviews, or comments — `pr-queue` does that.
 
 ## Prerequisites
 
 - `GITHUB_TOKEN` and `KYVERNO_REPO` (`owner/repo`) from the profile's `.env`.
 - `mcp-github` tools: `list_label`, `get_file_contents`, `get_team_members`,
-  `get_teams`, `search_code`.
+  `get_teams`, `search_code`, `search_pull_requests`, `issue_read`.
+- `mnemosyne_recall` — for the cached `AGENTS.md`/`ARCHITECTURE.md` docs (see
+  "Live-resolved" step 4).
 
-## Quick Reference
+## Live-resolved every session
 
-- `list_label(owner, repo)` — every label `KYVERNO_REPO` actually has.
-- `get_file_contents(owner, repo, path="CODEOWNERS")` — raw CODEOWNERS text.
-- `get_team_members(org, team_slug)` — resolve a `@org/team` CODEOWNERS entry
-  against `MAINTAINER_GITHUB_LOGIN`.
-- `search_code(query="<terms> repo:${KYVERNO_REPO}")` — find a repo doc
-  (`AGENTS.md`, `CONTRIBUTING.md`, `docs/**`) or a symbol's other usages on
-  demand, scoped to what the current question needs. Always include
-  `repo:${KYVERNO_REPO}` — unqualified, this searches all of GitHub, not
-  just this repo.
+Never carry any of this across sessions or a `KYVERNO_REPO` change — this instance may
+be repointed at a different repo, and a stale answer from one is actively wrong for
+another.
 
-## Procedure
+1. **Labels**: `list_label(owner, repo)`, held for the rest of the session. Never
+   assume a label exists without having seen it here.
+2. **CODEOWNERS**: `get_file_contents(path="CODEOWNERS")`, parsed as ordered
+   `(path-pattern, owner)` pairs. To find who owns a path, walk the lines in file
+   order and keep the *last* match — GitHub's rule is last-match-wins, not
+   longest-pattern. A team owner (`@org/team`) needs `get_team_members` to check
+   whether `MAINTAINER_GITHUB_LOGIN` is actually a member.
+3. **Milestone**: a real field on the PR itself today — `search_pull_requests(query='...
+   milestone:"Kyverno Release X.Y.Z"')` filters directly. Naming convention:
+   `"Kyverno Release X.Y.Z"` (e.g. `"Kyverno Release 1.20.0"`). `milestone-pr` is a
+   secondary label (closes a milestone-tracked issue directly) — don't assume it's
+   equivalent to the PR having a `milestone` set; check both independently.
+4. **`AGENTS.md`/`ARCHITECTURE.md` docs**: `scripts/install.sh` caches every one of
+   these in the repo (12 as of this writing: root `AGENTS.md` and `ARCHITECTURE.md`,
+   `api/AGENTS.md`, and one per major package — `pkg/engine`, `pkg/cel`,
+   `pkg/webhooks`, `pkg/controllers`, `pkg/clients`, `pkg/background`, `pkg/image`,
+   `pkg/toggle`, `cmd/cli/kubectl-kyverno/exception`) into mnemosyne at install time,
+   each under its own id, `kyverno-doc:<path>` (e.g. `kyverno-doc:pkg/engine/AGENTS.md`).
+   `mnemosyne_recall` the one relevant to whatever package is in play before falling
+   back to a fresh `search_code(query="<terms> repo:${KYVERNO_REPO}")` — the cache
+   won't have a doc added after install, or anything outside these 12 paths.
+5. **Other repo docs on demand**: `search_code` for `CONTRIBUTING.md`/`docs/**` or a
+   symbol's usages — scoped to the current question, not preloaded.
 
-1. At the start of each session, call `list_label` against `KYVERNO_REPO` and
-   hold the result for the rest of the session. Never assume a label like
-   "ready-for-review" exists without having seen it in this call —
-   `kyverno/kyverno`'s real label set has no such label as of this writing
-   (confirmed by listing it directly; see Pitfalls for why this is checked
-   per-session, not assumed from a prior run).
-2. Call `get_file_contents` for `CODEOWNERS` at the repo root. Parse it as an
-   ordered list of `(path-pattern, owner)` pairs, top to bottom. An owner is
-   either an individual (`@user`) or a team (`@org/team-slug`).
-3. To find who owns a given changed path: walk the CODEOWNERS lines in file
-   order and keep the *last* line whose pattern matches — GitHub's own rule
-   is last-match-wins, not longest-pattern-wins (a later, broader pattern
-   overrides an earlier, narrower one if it comes after it in the file). If
-   that owner is a team, call `get_team_members` to check whether
-   `MAINTAINER_GITHUB_LOGIN` is a member before concluding they're a
-   requested reviewer for that path.
-4. Re-resolve both label list and CODEOWNERS at the start of every new
-   session — don't reuse a value from a previous session's memory. This
-   instance may be repointed at a different `KYVERNO_REPO` between sessions
-   (sandbox → `kyverno/kyverno`), and a stale answer from one repo is
-   actively wrong for the other.
+## Fixed facts
 
-## Reference: Kyverno's codegen fan-out (fixed fact, not repo metadata)
+Re-verify against the live repo (`.github/workflows/`, `.claude/settings.json`,
+`api/AGENTS.md`, `gh label list`) if a decision materially depends on one of these and
+it's been a while — they're frozen at the research pass that produced them, most
+recently 2026-10.
 
-The API types are split across **two repos**, verified against
-`api/AGENTS.md` and `docs/context/shared/{repo-boundaries,api-versioning}.md`
-on `kyverno/kyverno`'s `main`: `kyverno.io` (`v1`/`v1beta1`/`v2`/`v2alpha1`/
-`v2beta1`), `wgpolicyk8s.io` (as `policyreport`), and `reports.kyverno.io`
-live in this repo's own `api/**`. The CEL-based `policies.kyverno.io` types
-(`ValidatingPolicy`, `MutatingPolicy`, `GeneratingPolicy`, `DeletingPolicy`,
-`ImageValidatingPolicy`, `PolicyException`, and their `Namespaced*` variants)
-live in the **separate `github.com/kyverno/api` Go module**, pinned in
-`go.mod` — a PR in `kyverno/kyverno` can never touch those type definitions
-directly; the equivalent generated-input event for that half of the surface
-is a `go.mod`/`go.sum` bump of `github.com/kyverno/api` (shaped like a
-Dependabot dependency bump, not an `api/**` diff).
+**Codegen fan-out.** Two repos split the API types: `kyverno.io`/`wgpolicyk8s.io`/
+`reports.kyverno.io` live in this repo's `api/**`; the CEL-based `policies.kyverno.io`
+types (`ValidatingPolicy`, `MutatingPolicy`, etc.) live in the separate
+`github.com/kyverno/api` Go module — a `go.mod`/`go.sum` bump of that module is the
+generated-input event for that half, shaped like a Dependabot bump, not an `api/**`
+diff. No-edit generated paths (from `.claude/settings.json`'s `permissions.deny`):
+`zz_generated.*.go`, `/pkg/client/**`, `/pkg/clients/**/*.generated.go` (no `DO NOT
+EDIT` header — path is the only signal; `pkg/clients/dclient/client.go` is the one
+hand-written exception), `/config/crds/**`, `/cmd/cli/kubectl-kyverno/{config,data}/crds/**`
+(the CLI's copy is second-order — updating `config/crds/**` without it is itself a
+generated-file conflict), `/charts/**/crds/**` + `charts/**/README.md`,
+`/docs/user/crd/**`, plus two single files (`pkg/config/mocks/mock_config.go`,
+`config/install-latest-testing.yaml`). Outside `pkg/clients`, the reliable "is this
+generated" signal is the `// Code generated ... DO NOT EDIT.` header, not just the
+filename pattern. `check-codegen.yaml` gates all of this pre-merge — two PRs feeding
+the same generated output conflict on it even when their own diffs don't overlap.
 
-Every generated no-edit path, verified directly against `kyverno/kyverno`'s
-own `.claude/settings.json` (`permissions.deny`) — the maintainers' own
-machine-enforced list, more precise than inferring from the `Makefile`
-alone:
+**Pre- vs. post-merge CI.** Pre-merge (`pull_request`-triggered, gates the PR):
+`check-codegen`/`check-unit-tests`/`check-golangci-lint`/`check-vet`/`check-imports`/
+`check-fmt`/`check-cli-tests`/`check-framework`/`check-ct-lint`/`check-ah-lint`/
+`check-devcontainer`/`check-unused-package`/`check-sha-pinned-actions`. Post-merge only
+(push-to-`main`/release-branch via `check-tests.yaml`, never on a PR):
+`tests-conformance.yaml` (Chainsaw, 3 k8s versions), `tests-conformance-policy-library.yaml`
+(12-way sharded, checks out the separate `kyverno/policies` repo and isn't scoped to
+any package here), `tests-k6.yaml`, perf benchmarks. Nothing catches a bad interaction
+between two individually-green PRs before both land — that's what `e2e-gate` reacts to
+below. `pr-queue` treats a PR touching core policy-evaluation surface (`pkg/engine`,
+`pkg/cel`, `pkg/validation`, `pkg/image`, `pkg/webhooks`) as elevated post-merge risk
+on this basis — there's no precise package→suite table to build, since the policy-
+library suite genuinely isn't package-scoped.
 
-- `zz_generated.deepcopy.go`, `zz_generated.register.go` — from
-  `codegen-api-register`/`codegen-api-deepcopy`, `api/**/*_types.go` input.
-- `/pkg/client/**` — the whole generated clientset/listers/informers tree,
-  for *both* API groups above (client-gen's inputs include the external
-  module's `policies.kyverno.io` types alongside this repo's own).
-- `/pkg/clients/**/*.generated.go`, `/pkg/clients/**/interface.generated.go`
-  — the instrumented client-wrapper layer (`make codegen-client-wrappers`).
-  Notably carries **no** `// DO NOT EDIT` header, unlike every other
-  generated zone here — path-matching is the only reliable signal for this
-  one, not the header. `pkg/clients/dclient`'s hand-written `client.go` is
-  the one real exception in this directory: genuinely hand-maintained, not
-  generated, despite living alongside generated siblings.
-- `/config/crds/**/*.yaml`, `/cmd/cli/kubectl-kyverno/config/crds/**` — CRD
-  manifests (`codegen-crds-*`), one target per API group plus a CLI-specific
+**`e2e-gate` — branch-level, not path-level.** When the post-merge conformance suite
+fails on a branch, an `e2e-failure`-labelled issue opens, and a required "E2E Gate"
+commit status turns **red on every open PR targeting that branch** — unconditionally,
+regardless of which files any individual PR touches. The only escape is the PR itself
+carrying `e2e-gate-bypass`. An `e2e-failure` issue with no branch marker in its body blocks
+*every* branch. No mechanical "safe because it doesn't touch the failing files"
+path exists — `sequence_prs` states `gate_blocked` as a fact; any bypass suggestion
+is the agent reading the failure issue itself, never automatic. `ready-for-review`
+is independent of this — a PR can carry both.
+
+**Label taxonomy** (from `.github/labels.yml` — step 1 above re-checks the full list
+every session, this is reference):
+
+- `ready-for-review`: DCO/CI/conflicts/review-threads all clean — shared by human and
+  Dependabot PRs alike; a clean Dependabot bump gets this same label, not a separate
   one.
-- `/cmd/cli/kubectl-kyverno/data/crds/**` — a **second-order copy** of
-  specific `config/crds/**` files into the CLI's embedded data, via
-  `codegen-cli-crds`. A PR that updates `config/crds/**` by hand without the
-  matching `data/crds/**` copy is itself generated-file-conflict-shaped —
-  flag it even with no second PR involved.
-- `/charts/kyverno/charts/crds/templates/*/**`, `/charts/**/README.md` — a
-  **third** CRD-content target (the Helm chart's embedded CRDs) plus
-  helm-docs-generated READMEs, via `codegen-helm-all`.
-- `/docs/user/crd/**` — API reference docs, via `codegen-api-docs`.
-- `/pkg/config/mocks/mock_config.go`, `/config/install-latest-testing.yaml`
-  — narrower generated single files, not fed by `api/**` but still no-edit.
+- `needs-author-action`: the human-PR finding (failing DCO/CI, a merge conflict, or
+  an unresolved thread).
+- `needs-review`: the Dependabot equivalent of `needs-author-action`, not of
+  `ready-for-review` — a major/unconfirmed-semver bump, failing CI, a conflict, or
+  Copilot not recommending approval. Always name the actual cause, never just the
+  label.
+- `workflow-approval-required`: a fork PR awaiting a maintainer's manual approval of
+  its Actions run before CI starts — distinct from, and can co-occur with,
+  `needs-author-action`. No tool in this toolset can approve a pending run
+  (`config.yaml`'s granted `mcp-github` tools are read-only) — say so, point at the
+  GitHub UI.
+- `milestone-pr`: closes an issue under a currently **open** `"Kyverno Release ..."`
+  milestone — narrower than just having `milestone` set (step 3 above).
+- `major-bump`: permanent, paired with `needs-review` — an unconfirmed-or-major
+  Dependabot bump.
+- `ai-generated` / `spam`: CodeRabbit slop/spam-burst flags, not sequencing input.
+- `release-critical`/`-high`/`-medium`/`-low`: not in `.github/labels.yml` — no
+  workflow applies or removes them. Still real: maintainers set these by hand on an
+  **issue** to mark its urgency toward a milestone. Check a PR's closing issue's
+  labels (`fetch_pr_candidates`'s `closing_issues[].labels`) for these, not the PR's
+  own labels.
 
-Outside `pkg/clients` (the documented exception above), the reliable signal
-for "this specific file is generated" is the `// Code generated ... DO NOT
-EDIT.` header — the filename pattern (`zz_generated.*`) is one instance of
-that convention, not the whole rule, per `api/AGENTS.md` directly.
+## What this agent remembers, and where
 
-`check-codegen.yaml` gates all of this pre-merge on `kyverno/kyverno`
-itself. The practical consequence for `pr-queue`: two open PRs whose diffs
-both feed the same generated-output path above will conflict on that
-*generated* file even when their own diffs don't overlap — including a
-`kyverno/kyverno` PR touching `api/**` alongside a Dependabot PR bumping
-`github.com/kyverno/api`, since both feed clientset/CRD regeneration. Flag
-this as a generated-file conflict, not just a normal merge conflict.
+Three places — `pr-queue`/`pr-actions`/`discussions` point here instead of repeating.
 
-## Reference: Kyverno's pre-merge vs post-merge CI split (fixed fact)
+**MEMORY.md/USER.md** (built-in, ~800+500 chars) — fixed *slots*, replaced in place as
+facts change, never appended to: USER.md holds review priority ordering, communication
+style, delegation boundary, cadence, risk tolerance; MEMORY.md holds current
+milestone/focus, standing holds, maintainer-stated sequencing intent, recently-settled
+structural facts, active experiments, a pointer to Mnemosyne. **Never** write PR/
+review/label state, Slack messages, per-PR incident/contributor history, or labels/
+CODEOWNERS here — all of that is either always-live or belongs in Mnemosyne below.
 
-Verified directly against `kyverno/kyverno`'s `.github/workflows/`:
-
-- **Pre-merge** (`pull_request`-triggered, gates the PR): `check-codegen.yaml`,
-  `check-unit-tests.yaml`, `check-golangci-lint.yaml`, `check-vet.yaml`,
-  `check-imports.yaml`, `check-fmt.yaml`, `check-cli-tests.yaml`,
-  `check-framework.yaml`, `check-ct-lint.yaml`, `check-ah-lint.yaml`,
-  `check-devcontainer.yaml`, `check-unused-package.yaml`,
-  `check-sha-pinned-actions.yaml`.
-- **Post-merge only** (`push`-to-`main`-triggered via `check-tests.yaml`,
-  never runs on a PR): `tests-conformance.yaml` (Chainsaw-style, matrixed
-  across 3 k8s versions, fixtures under `test/conformance/chainsaw/**` and
-  `test/chainsaw/**` in this repo), `tests-conformance-policy-library.yaml`
-  (12-way sharded), `tests-k6.yaml`, performance benchmarks.
-
-`tests-conformance-policy-library.yaml` checks out the **separate
-`kyverno/policies` repo** and runs that freshly-built binary against its
-policy corpus — the suite isn't scoped to any package in `kyverno/kyverno`
-at all; it exercises whatever surface a real-world policy sample reaches
-(engine, CEL evaluation, image verification, webhooks routing, ...) end to
-end. This is the real reason `kyverno-context` doesn't attempt a
-path-to-suite mapping (see Pitfalls/test-scenarios' honesty-test scenario):
-one of the two biggest post-merge suites genuinely isn't package-scoped, so
-a precise mapping for it would be fabricated, not derived. `pr-queue` treats
-a PR touching core policy-evaluation surface (`pkg/engine`, `pkg/cel`,
-`pkg/validation`, `pkg/image`, `pkg/webhooks`) as elevated post-merge risk
-on that basis, not from a specific package→suite table.
-
-Nothing catches a bad interaction between two individually-green PRs before
-both land on `main` — true for the *first* such interaction. See the
-`e2e-gate` reference below for what happens after that first failure lands.
-
-## Reference: `e2e-gate` — reactive post-merge block (live on `main` today)
-
-Verified directly against `.github/workflows/e2e-gate.yaml` on
-`kyverno/kyverno`'s real `main` branch. When the post-merge-only conformance suite (`tests-*.yaml` via
-`check-tests.yaml`) fails on a branch, an `e2e-failure`-labelled tracking
-issue opens and a required "E2E Gate" commit status turns red on every open
-PR targeting that branch, blocking further merges until either the issue is
-closed or the specific fixing PR carries `e2e-gate-bypass`. Refines, doesn't
-replace, the fact above: the *first* bad interaction between two green PRs
-still lands undetected, but a post-merge failure it causes does reactively
-block everything else behind it, not silently let more PRs stack on a broken
-`main`. When `pr-queue` flags post-merge risk, check whether an
-`e2e-failure` issue is already open for the target branch — if so, the
-whole queue is currently gated, not just the flagged PR.
-
-## Reference: file-risk classification vocabulary (for merge-sequencing)
-
-Three tiers `pr-queue` uses to classify a PR's changed files when building a
-merge-sequence recommendation, most to least constraining:
-
-- **Generated** — a file matching the codegen fan-out map above: any of the
-  `.claude/settings.json`-sourced paths, a `// Code generated ... DO NOT
-  EDIT.` header, or (`pkg/clients` only) the `*.generated.go`/
-  `interface.generated.go` filename convention with no header. On the
-  *input* side: `api/**/*_types.go` in this repo, or a `go.mod`/`go.sum`
-  bump of `github.com/kyverno/api` (the external-module equivalent). Two
-  candidates both touching generated-file *inputs* that feed the same
-  output conflict on that output even with zero diff overlap — order
-  input-before-output when one candidate is literally the codegen/bump
-  run itself, otherwise flag the pair for a human rather than guessing an
-  order. Check this tier *first*: a file can look interface-like
-  (`pkg/clients/**/interface.generated.go`) while actually being generated
-  output — Generated takes precedence over Interface when a path matches
-  both.
-- **Interface** — a hand-written file defining a Go interface, exported
-  type, or public function signature that other in-flight candidates' diffs
-  call or implement — concrete real examples in this codebase:
-  `pkg/clients/dclient`'s `Interface` (`client.go`, hand-maintained, the one
-  non-generated file in its directory), `pkg/client/clientset/versioned`'s
-  top-level `Interface`, `pkg/engine/api`'s engine/context-loader
-  interfaces. Approximated via `search_code`, not a real call graph — see
-  `docs/architecture.md`. Order definer-before-implementer when the
-  direction is unambiguous from the diffs; flag as a cycle for a human
-  otherwise.
-- **Test-only** — a `*_test.go` file anywhere, or any path under `test/**`
-  (`test/conformance/chainsaw/**`, `test/chainsaw/**`, `test/cli/**`,
-  `test/policy/**`, `test/fuzz/**`, and the rest of `test/`'s
-  subdirectories — none of them require production-code changes to
-  exercise), with no production-code change alongside. Lowest constraint:
-  sequence by milestone-alignment/age, not file overlap.
-
-A file can be unclassified (touches none of the above) — that's the common
-case, not an error; it just means file-overlap conflict detection (plain
-path intersection) is the only signal for that file, no risk tier attached.
-
-The generated/generated-input/test-only patterns above are also encoded in
-`plugins/kyverno-sequencer/sequencer.py` (`sequence_prs`, used by
-`pr-queue` to compute the candidate merge order) — kept in sync manually.
-Re-verify both if Kyverno's generated-path list ever changes; the interface
-tier isn't mirrored there since direction requires reading diffs, not just
-path patterns (`pr-queue` supplies those edges as `precedence_hints`).
-
-## Reference: readiness-label taxonomy (from `.github/labels.yml`)
-
-- `ready-for-review` — clean: DCO/CI/conflicts (+ review threads for human
-  PRs) all pass. Applied by `pr-readiness-check.yaml` (human PRs) or
-  `dependabot-merge-triage.yaml` (Dependabot PRs).
-- `needs-author-action` — a real finding on a human PR (failing DCO/CI, the
-  `merge-conflicts` label present, or an unresolved review thread whose last
-  comment isn't the author's). Paired with a one-time itemized comment
-  naming which.
-- `needs-review` — the Dependabot equivalent: not confirmed patch/minor, or
-  not clean, or Copilot didn't recommend approval.
-- `major-bump` — informational, permanent, always paired with
-  `needs-review`: a major-semver Dependabot bump, or one whose semver level
-  couldn't be confirmed from the commit trailers at all.
-- `ai-generated` / `spam` — CodeRabbit slop-detection and spam-burst flags,
-  not part of the merge-sequencing logic itself.
-
-This is real ground truth for what the taxonomy looks like, kept here as
-context — it does **not** change step 1's live-resolution rule below.
-`list_label` is still called every session; don't assume a name from this
-list is present without having seen it in that call.
-
-## Reference: finding milestone-focused PRs
-
-No tool lists issues/PRs by milestone (checked every tool's full schema,
-not just names — `issue_write`'s `milestone` param only *sets* a number).
-Use the `milestone-pr` label instead: `label:milestone-pr` on
-`search_pull_requests` finds PRs solving a milestone issue directly. For
-which milestone/version a specific one targets, read its closing issue
-(`issue_read`) and that issue's `milestone` field — don't guess a
-`milestone:"..."` query string.
+**Mnemosyne** (`mnemosyne_*`, `memory.provider: mnemosyne`) — for what accumulates past
+a slot's size or has no other live source: post-merge breakage per package-pair
+(`triple_add(subject=<pair>, predicate="caused_e2e_failure", object=<PR#, date>)`,
+queried before flagging post-merge risk on a new PR touching the same packages),
+rejected/deferred PR reasons (`remember`/`recall`), contributor patterns, durable
+Slack-stated policies, milestone-scoped policy decisions
+(`triple_add(subject=<milestone>, predicate="excludes"|"prioritizes", object=<policy>)`),
+and the `e2e-gate` incident timeline (`triple_add(subject=<branch>,
+predicate="e2e_failure_opened"|"e2e_failure_closed", object=<date, issue#>)`). Only 8
+tools: `remember`/`recall`/`update`/`forget`/`triple_add`/`triple_query`/`diagnose`/
+`sleep`. **Real gap**: `write_approval: true` stages `remember` but `triple_add`
+commits straight to the database — `hooks/block-mnemosyne-triples.sh` allowlists
+exactly the five predicates above and blocks anything else; extending a use case means
+extending that allowlist deliberately. Written interactively (contributor patterns,
+Slack policies, milestone decisions, and any on-demand incident/rejection) or swept
+(`cron/jobs.json`'s `kyverno-memory-sweep`, for incidents/rejections/gate-timeline that
+can happen with nobody asking; `kyverno-memory-consolidate` runs `sleep` on a separate,
+slower cadence).
 
 ## Pitfalls
 
-- Don't carry a label list or CODEOWNERS parse across sessions or across a
-  `KYVERNO_REPO` change — always re-resolve (step 4 above).
-- Last-match-wins for CODEOWNERS, not longest-pattern or first-match — a
-  broad `*` line after a narrow one *does* override it if it comes later in
-  the file.
-- The codegen/CI-split, `e2e-gate`, and label-taxonomy facts above are
-  frozen at the research pass that produced them. If a merge-order decision
-  materially depends on any of them and it's been a while, re-verify with
-  `get_file_contents` on `Makefile` / `.github/workflows/` /
-  `.claude/settings.json` (`permissions.deny`, the generated-path source) /
-  `api/AGENTS.md` / `docs/context/shared/{repo-boundaries,api-versioning}.md`
-  rather than trusting this file blindly — the two-repo API split in
-  particular is a real architectural fact, not just a path list, and worth
-  re-checking if `kyverno/api` is ever folded back into this repo (the
-  `repo-boundaries.md` doc explicitly flags that as a live possibility, not
-  a settled decision).
-- There's no dedicated milestone-listing tool in `github-mcp-server` —
-  milestone data comes from fields on `search_pull_requests` results and
-  its `milestone:"name"` query qualifier. That qualifier is
-  `search_pull_requests`-only: `search_issues` takes a natural-language
-  query, not GitHub qualifier syntax, and has no equivalent (see
-  `pr-queue`'s Pitfalls). This skill doesn't handle milestones either way.
-- Don't preload every repo doc every session — `search_code` on demand,
-  scoped to the current question, not eagerly.
-
-## Reference: what this agent remembers, and where
-
-Three places, each for a different kind of thing — `pr-queue`/`pr-actions`/
-`discussions` point here instead of repeating this.
-
-**MEMORY.md / USER.md** (built-in, ~800+500 chars total) — a fixed set of
-*slots*, each holding the current value of one fact, `replace`d in place as
-it changes, never appended to as a growing log:
-
-- USER.md: review priority ordering, communication style, delegation
-  boundary, working cadence/timezone, standing risk tolerance, pet peeves
-  about this assistant's own output.
-- MEMORY.md: current milestone/focus, standing holds, maintainer-stated
-  sequencing intent (a human plan, not a GitHub-queryable fact — e.g. "PR
-  #1923 held until #1834 lands"), recently-settled structural repo facts,
-  active experiments/trials, a pointer line to Mnemosyne's existence, and
-  (once Phase 9 exists) open security-advisory tracking.
-
-**Never write to MEMORY.md/USER.md:** PR review/approval/merge/label state
-(always live via `pull_request_read`/`issue_read` — a memorized copy goes
-stale the moment anything changes), Slack messages within the fetchable
-history window (`pr-queue`'s on-demand lookup already covers "recent"),
-per-PR incident history/rejection reasons/contributor patterns (the
-accumulating category — see Mnemosyne below, this would blow the character
-budget within weeks), labels/CODEOWNERS (this skill already re-resolves
-them live every session).
-
-**Mnemosyne** (`mnemosyne_*` tools; `memory.provider: mnemosyne`) — for
-knowledge that either accumulates past what a slot can hold, or has no
-other live source of truth. Six categories:
-
-1. Post-merge breakage / risky package-combination log —
-   `mnemosyne_triple_add(subject=<package-pair>, predicate="caused_e2e_failure",
-   object=<PR#, date, description>)`. Retrieved via `mnemosyne_triple_query`
-   before flagging post-merge risk on a new PR touching the same packages —
-   turns "no path-to-suite mapping exists" into "no mapping, but N real
-   historical incidents on this combination."
-2. Rejected/deferred PR reasons — `mnemosyne_remember()` when a PR closes
-   unmerged with a known reason; `mnemosyne_recall()` when a similar new PR
-   appears.
-3. Contributor patterns — `mnemosyne_remember()` durable, repeated
-   observations; recalled before a review brief or discussion reply.
-4. Durable instructions surfaced from Slack — `mnemosyne_remember()` only
-   for a stated standing policy, never routine chatter.
-5. Milestone-scoped policy decisions —
-   `mnemosyne_triple_add(subject=<milestone>, predicate="excludes"/"prioritizes",
-   object=<policy>)`.
-6. CI/`e2e-gate` incident timeline —
-   `mnemosyne_triple_add(subject=<branch>, predicate="e2e_failure_opened"/"e2e_failure_closed",
-   object=<date, issue#>)` — the raw timeline behind category 1's pattern.
-
-Only these 8 tools are used: `mnemosyne_remember`, `_recall`, `_update`,
-`_forget`, `_triple_add`, `_triple_query`, `_diagnose`, `_sleep`.
-`_update`/`_forget` operate on a `remember()`-created `memory_id`, not on
-triples — to retire or replace a triple, add a new one (the default
-`supersede=true` closes the prior one automatically) or use `_triple_end`.
-Not used: `scratchpad_*`, `sync_*`, `export`/`import`, `graph_link`/
-`graph_query`, `batch`, `persona_*`, `shared_*`, media/model tools.
-
-**Real gap, found live, not assumed from the plugin's docs:**
-`memory.write_approval: true` correctly stages `mnemosyne_remember` (a real
-pending file appears on disk, needs `mnemosyne_apply_pending`) but
-`mnemosyne_triple_add` commits straight to the database, bypassing the gate
-entirely (verified: no pending file, the row lands immediately in the real
-`triples` table). `hooks/block-mnemosyne-triples.sh` is the actual control
-for that tool — it allowlists exactly the five predicates the categories
-above use (`caused_e2e_failure`, `e2e_failure_opened`,
-`e2e_failure_closed`, `excludes`, `prioritizes`) and blocks anything else.
-Adding a new triple-writing use case means extending that allowlist
-deliberately, not assuming `write_approval` covers it.
-
-**Two ways things get written — kept distinct:**
-
-- **Interactively** (categories 3, 4, 5, and any on-demand instance of 1/2):
-  written by whichever skill notices something worth keeping during a live
-  turn — there's no external event for a sweep to detect a milestone
-  policy or a Slack-stated instruction.
-- **Swept** (categories 1, 2, 6 specifically): a PR closing unmerged or an
-  `e2e-gate` trip can happen while nobody's asking — `cron/jobs.json`'s
-  `kyverno-memory-sweep` job checks for these on a schedule, mostly
-  `[SILENT]`. `kyverno-memory-consolidate` (weekly, separate cadence on
-  purpose) calls `mnemosyne_sleep` to compress accumulated entries.
+- Don't carry labels/CODEOWNERS/milestone across sessions or a `KYVERNO_REPO` change.
+- Last-match-wins for CODEOWNERS — a broader pattern overrides a narrower one if it
+  comes later in the file.
+- `search_issues` takes a natural-language query, not qualifier syntax — filter on the
+  returned `milestone` field client-side. `milestone:"..."` is `search_pull_requests`-
+  only.
+- Don't preload docs outside the 12 cached paths — `search_code` on demand.
 
 ## Verification
 
-- Ask "what labels does `<repo>` have" for two different `KYVERNO_REPO`
-  values in one session and confirm `list_label` is actually called each
-  time, not answered from a repeated/memorized list.
-- Ask "does `<path>` need sign-off from `<team>`" and confirm the answer
-  comes from a real `get_file_contents` + `get_team_members` call, not a
-  guess.
-- Ask it to remember a fact that's really live PR/review state and confirm
-  it declines (or redirects to citing the live tool instead), rather than
-  writing a copy to memory that would immediately go stale.
-- Try to get it to `triple_add` a predicate outside the five listed above
-  and confirm the hook blocks it — a memory-relevant use case that's
-  actually needed should extend the allowlist, not bypass it.
+- Ask "what labels does `<repo>` have" for two different `KYVERNO_REPO` values and
+  confirm `list_label` runs each time, not a memorized list.
+- Ask "does `<path>` need sign-off from `<team>`" and confirm a real
+  `get_file_contents` + `get_team_members` call backs the answer.
+- Ask for a milestone's PRs and confirm `milestone:"Kyverno Release X.Y.Z"` is used
+  directly, no closing-issue detour.
+- Ask about a `release-critical` issue with no milestone and confirm the answer
+  doesn't invent one.
+- Ask about a `workflow-approval-required` PR and confirm it states plainly that no
+  tool here can approve the run.
+- Ask about `pkg/engine`'s conventions and confirm `mnemosyne_recall` for
+  `kyverno-doc:pkg/engine/AGENTS.md` runs before any `search_code` fallback.
+- Try to `triple_add` a predicate outside the five listed and confirm the hook blocks
+  it.

@@ -37,18 +37,6 @@ if ! docker info >/dev/null 2>&1; then
 fi
 pass "docker is running"
 
-if python3 -c "import ortools" >/dev/null 2>&1; then
-  pass "ortools available (sequence_prs will use the exact CP-SAT solver)"
-else
-  info "ortools not found — installing (used by sequence_prs for optimal sequencing;"
-  info "the tool still works without it, via a stdlib fallback, if this install fails)"
-  if python3 -m pip install --quiet ortools >/dev/null 2>&1; then
-    pass "ortools installed"
-  else
-    info "ortools install failed — sequence_prs will use its stdlib greedy fallback instead"
-  fi
-fi
-
 step "2. Profile install"
 
 if [ -d "$PROFILE_DIR" ]; then
@@ -141,6 +129,103 @@ for var in ('KYVERNO_REPO', 'MAINTAINER_GITHUB_LOGIN', 'SLACK_HOME_CHANNEL'):
 "
 pass "skill instructions resolved to real env values"
 
+step "4. AGENTS.md cache"
+
+# Discovers every AGENTS.md/ARCHITECTURE.md in the repo (not just api/AGENTS.md — kyverno/kyverno
+# has one per major package: pkg/engine, pkg/cel, pkg/webhooks, etc., plus root AGENTS.md and
+# ARCHITECTURE.md) via one git-tree call, then caches each as its own mnemosyne entry so
+# kyverno-context can recall the one relevant to whatever package is in play instead of a fresh
+# search_code every session.
+AGENTS_SEED_FILE="$(mktemp)"
+python3 -c "
+import base64, json, ssl, urllib.request, urllib.error
+
+try:
+    import certifi
+    _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _SSL_CTX = None  # falls back to the interpreter's default cert store
+
+values = {}
+with open('$ENV_FILE') as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, _, v = line.partition('=')
+        values[k.strip()] = v.strip()
+
+repo = values.get('KYVERNO_REPO')
+token = values.get('GITHUB_TOKEN')
+
+def api_get(path):
+    req = urllib.request.Request(
+        f'https://api.github.com/{path}',
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'kyverno-assistant-install',
+        },
+    )
+    with urllib.request.urlopen(req, timeout=20, context=_SSL_CTX) as resp:
+        return json.load(resp)
+
+try:
+    default_branch = api_get(f'repos/{repo}')['default_branch']
+    tree = api_get(f'repos/{repo}/git/trees/{default_branch}?recursive=true')
+except (urllib.error.URLError, urllib.error.HTTPError, ssl.SSLError, KeyError) as exc:
+    print(f'SKIP: could not list {repo}\'s tree: {exc}')
+    print('HINT: if this is an SSL cert error, try: python3 -m pip install certifi')
+    raise SystemExit(0)
+
+import re
+doc_paths = [n['path'] for n in tree.get('tree', [])
+             if re.search(r'(?i)agents\.md$|architecture\.md$', n['path'])]
+if not doc_paths:
+    print('SKIP: no AGENTS.md/ARCHITECTURE.md files found')
+    raise SystemExit(0)
+
+entries = []
+failed = []
+for path in doc_paths:
+    try:
+        payload = api_get(f'repos/{repo}/contents/{path}')
+        content = base64.b64decode(payload['content']).decode('utf-8')
+    except (urllib.error.URLError, urllib.error.HTTPError, ssl.SSLError, KeyError) as exc:
+        failed.append(path)
+        continue
+    entries.append({
+        'id': f'kyverno-doc:{path}',
+        'content': f'--- {path} ---\n{content}',
+        'source': 'install-seed',
+        'timestamp': '2026-01-01T00:00:00',
+        'session_id': 'install-seed',
+        'importance': 0.9,
+        'scope': 'global',
+        'pinned': 1,
+    })
+
+if not entries:
+    print('SKIP: found doc paths but could not fetch any of them')
+    raise SystemExit(0)
+
+seed = {'mnemosyne_export': {'version': '1.3'}, 'working_memory': entries}
+with open('$AGENTS_SEED_FILE', 'w') as f:
+    json.dump(seed, f)
+print(f'OK: {len(entries)} cached' + (f', {len(failed)} failed: {failed}' if failed else ''))
+" > "$AGENTS_SEED_FILE.status" 2>&1
+
+if grep -q "^OK:" "$AGENTS_SEED_FILE.status"; then
+  if hermes -p "$PROFILE" mnemosyne import -i "$AGENTS_SEED_FILE" --force >/dev/null 2>&1; then
+    pass "$(sed 's/^OK: //' "$AGENTS_SEED_FILE.status") (recall by 'kyverno-doc:<path>' any session)"
+  else
+    info "docs fetched but mnemosyne import failed — run: hermes -p $PROFILE mnemosyne import -i $AGENTS_SEED_FILE --force"
+  fi
+else
+  info "$(cat "$AGENTS_SEED_FILE.status") — skipping cache, kyverno-context will fall back to search_code"
+fi
+rm -f "$AGENTS_SEED_FILE" "$AGENTS_SEED_FILE.status"
+
 SLACK_CONFIGURED=$(python3 -c "
 values = {}
 with open('$ENV_FILE') as f:
@@ -153,7 +238,7 @@ with open('$ENV_FILE') as f:
 print('yes' if values.get('SLACK_BOT_TOKEN') and values.get('SLACK_APP_TOKEN') else 'no')
 ")
 
-step "4. Messaging gateway"
+step "5. Messaging gateway"
 
 if [ "$SLACK_CONFIGURED" = "yes" ]; then
   # gateway install/restart only work against the 'default' profile — switch
@@ -178,7 +263,7 @@ else
   info "no Slack credentials set — skipping gateway (CLI-only use is fine)"
 fi
 
-step "5. Sanity checks"
+step "6. Sanity checks"
 
 MCP_OUT=$(hermes -p "$PROFILE" mcp list 2>&1)
 if echo "$MCP_OUT" | grep -q "github .*enabled"; then

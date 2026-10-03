@@ -217,6 +217,10 @@ custom_toolsets:
     # Registers one tool, sequence_prs — a pure function over already-fetched PR metadata, no
     # GitHub/Slack access of its own. See docs/architecture.md for the packaging verification.
     - kyverno-sequencer
+    # kyverno-fetch: a bundled plugin (plugins/kyverno-fetch/). Registers fetch_pr_candidates —
+    # talks to GitHub's GraphQL API directly with this profile's own GITHUB_TOKEN, replacing
+    # N sequential pull_request_read calls with one tool call.
+    - kyverno-fetch
 
 toolsets: ["kyverno-assistant-tools"]
 
@@ -286,7 +290,8 @@ skills:
 plugins:
   enabled:
     - mnemosyne
-    # kyverno-sequencer: bundled at plugins/kyverno-sequencer/ (not the community catalog like
-    # mnemosyne) — installed as part of this repo, not a separate `hermes plugins install`.
+    # kyverno-sequencer, kyverno-fetch: bundled at plugins/<name>/ (not the community catalog
+    # like mnemosyne) — installed as part of this repo, not a separate `hermes plugins install`.
     - kyverno-sequencer
+    - kyverno-fetch
 agent: {}
