@@ -101,8 +101,9 @@ library suite genuinely isn't package-scoped.
 fails on a branch, an `e2e-failure`-labelled issue opens, and a required "E2E Gate"
 commit status turns **red on every open PR targeting that branch** — unconditionally,
 regardless of which files any individual PR touches. The only escape is the PR itself
-carrying `e2e-gate-bypass`. An `e2e-failure` issue with no branch marker in its body blocks
-*every* branch. No mechanical "safe because it doesn't touch the failing files"
+carrying `e2e-gate-bypass`. Each issue's body carries its branch as
+`<!-- workflow-failure:...:refs/heads/BRANCH -->`; no marker found blocks *every*
+branch. No mechanical "safe because it doesn't touch the failing files"
 path exists — `sequence_prs` states `gate_blocked` as a fact; any bypass suggestion
 is the agent reading the failure issue itself, never automatic. `ready-for-review`
 is independent of this — a PR can carry both.

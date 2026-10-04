@@ -1,7 +1,8 @@
 name: kyverno-fetch
 version: 0.1.0
-description: "One-call GraphQL fetch of PR-candidate metadata (body, files, labels, milestone, review/thread/CI state, closing issues) — replaces pr-queue's old sequential search_pull_requests + N*pull_request_read pattern. Stdlib-only, talks to GitHub's GraphQL API directly with the profile's own GITHUB_TOKEN. No GitHub/Slack MCP access of its own."
+description: "One-call GraphQL fetch of PR-candidate metadata (body, files, labels, milestone, review/thread/CI state, closing issues), plus fetch_file_diff_overlap for checking whether two PRs touching the same file touch the same lines. Stdlib-only, talks to GitHub's GraphQL/REST APIs directly with the profile's own GITHUB_TOKEN. No GitHub/Slack MCP access of its own."
 author: "Suhaani Agarwal"
 license: "MIT"
 provides_tools:
   - fetch_pr_candidates
+  - fetch_file_diff_overlap

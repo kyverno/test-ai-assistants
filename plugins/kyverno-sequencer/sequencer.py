@@ -68,8 +68,12 @@ TEST_ONLY_GLOB_PATTERNS = ["*_test.go", "test/*"]
 GENERATED_INPUT_GLOB_PATTERNS = ["api/*_types.go"]
 GENERATED_INPUT_DEPENDENCY_MODULE = "github.com/kyverno/api"
 
+# Covers real phrasing variants seen in the wild, not just the canonical form: "Parent:
+# #17701", "Stacks on top of #17695", "depends on kyverno/kyverno#17720", "Blocked by #N".
 _CROSS_REF_PATTERN = re.compile(
-    r"\b(?:depends on|blocked by|requires|stacked on)\s+#(\d+)", re.IGNORECASE
+    r"\b(?:depends on|blocked by|requires|stack(?:s|ed)?\s+on(?:\s+top\s+of)?|parent)\b"
+    r"\s*:?\s*(?:[\w.-]+/[\w.-]+)?#(\d+)",
+    re.IGNORECASE,
 )
 
 
@@ -274,9 +278,32 @@ def gate_blocked(p: PR, blocking_branches: set[str], blocks_all_branches: bool) 
     return blocks_all_branches or p.base_branch in blocking_branches
 
 
-def find_package_overlaps(prs: list[PR], edges: list[tuple[int, int, str]]) -> list[dict]:
-    """Pairs of candidates touching the same directory with no existing hard edge between
-    them — a real elevated-review signal that would otherwise have to be noticed by eye."""
+def find_file_overlaps(prs: list[PR], edges: list[tuple[int, int, str]]) -> list[dict]:
+    """Pairs of candidates touching the exact same file, no existing hard edge between them —
+    a real rebase-conflict *candidate*. Touching the same file doesn't mean the same lines;
+    `fetch_file_diff_overlap` checks that. Each path is tagged with its file_classification so
+    the same-file-but-TEST_ONLY case reads differently from the same-file-but-GENERATED one."""
+    edge_pairs = {frozenset((a, b)) for a, b, _kind in edges}
+    files_by_pr = {p.number: set(p.changed_files) for p in prs}
+    overlaps: list[dict] = []
+    for i, a in enumerate(prs):
+        for b in prs[i + 1:]:
+            if frozenset((a.number, b.number)) in edge_pairs:
+                continue
+            shared = sorted(files_by_pr[a.number] & files_by_pr[b.number])
+            if shared:
+                overlaps.append({
+                    "prs": [a.number, b.number],
+                    "files": [{"path": f, "file_classification": classify_file(f)} for f in shared],
+                })
+    return overlaps
+
+
+def find_package_overlaps(prs: list[PR], edges: list[tuple[int, int, str]], file_overlap_pairs: set[frozenset]) -> list[dict]:
+    """Pairs of candidates touching the same directory but *not* the same file — weaker than
+    `find_file_overlaps`: different files can't git-conflict, this is only "review together,
+    might interact" territory. Excludes pairs already reported as a file overlap, so the two
+    annotations don't double up on the same pair."""
     edge_pairs = {frozenset((a, b)) for a, b, _kind in edges}
     dirs_by_pr = {
         p.number: {os.path.dirname(f) for f in p.changed_files if classify_file(f) == "STANDARD"}
@@ -285,7 +312,8 @@ def find_package_overlaps(prs: list[PR], edges: list[tuple[int, int, str]]) -> l
     overlaps: list[dict] = []
     for i, a in enumerate(prs):
         for b in prs[i + 1:]:
-            if frozenset((a.number, b.number)) in edge_pairs:
+            pair = frozenset((a.number, b.number))
+            if pair in edge_pairs or pair in file_overlap_pairs:
                 continue
             shared = sorted(d for d in (dirs_by_pr[a.number] & dirs_by_pr[b.number]) if d)
             if shared:
@@ -317,7 +345,9 @@ def sequence(
     solved_numbers = [p.number for p in solved_prs]
 
     tiers_numbers = layer_into_tiers(solved_numbers, solved_edges)
-    package_overlaps = find_package_overlaps(solved_prs, solved_edges)
+    file_overlaps = find_file_overlaps(solved_prs, solved_edges)
+    file_overlap_pairs = {frozenset(o["prs"]) for o in file_overlaps}
+    package_overlaps = find_package_overlaps(solved_prs, solved_edges, file_overlap_pairs)
 
     preds: dict[int, list[tuple[int, str]]] = {n: [] for n in solved_numbers}
     succs: dict[int, list[tuple[int, str]]] = {n: [] for n in solved_numbers}
@@ -353,6 +383,7 @@ def sequence(
         "tiers": tiers_out,
         "cycles": [cyclic] if cyclic else [],
         "unresolved": unresolved,
+        "file_overlaps": file_overlaps,
         "package_overlaps": package_overlaps,
         "gate_status": {
             "blocking_branches": sorted(blocking_branches),

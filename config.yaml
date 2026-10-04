@@ -109,8 +109,9 @@ mcp_servers:
       #
       # Related-issue reads — issue_read's 'get' method returns
       # closed_by_pull_requests (skills/pr-queue uses this for "explain PR
-      # #N"); search_issues finds related discussion. No list_issues either,
-      # same reasoning as list_pull_requests above.
+      # #N"); search_issues finds related discussion. list_issues granted too
+      # — search_issues is natural-language only, unreliable for an exact
+      # label/state check (e.g. the e2e-gate).
       #
       # Label taxonomy + CODEOWNERS — read live, never hardcoded (see
       # skills/kyverno-context). get_team_members/get_teams resolve
@@ -138,6 +139,7 @@ mcp_servers:
         - pull_request_read
         - issue_read
         - search_issues
+        - list_issues
         - list_label
         - get_label
         - get_file_contents

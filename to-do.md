@@ -23,5 +23,7 @@
 
 
 - add stale pr label
-- 
+- dependabot prs not being labelled on hourly basis
+- add call graph gopls or something else for checking how different prs touching different files are still related to each other
+- agent should be dealing with issues as well - what issues are there, who raised, are they actually worth it? what kind of replies should the maintainer do , who to assign this issue to etc.
 - 

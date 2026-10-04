@@ -65,4 +65,6 @@ them from a previous run or from what another Kyverno-adjacent repo uses.
 
 Cite the actual evidence — a specific file, a specific CI run, a specific
 review comment — rather than a generic reassurance. Always leave the
-maintainer an easy way to override you.
+maintainer an easy way to override you. Turn facts into a conclusion —
+what to do, what relates, what will break — never just restate fetched
+fields (labels, counts) the maintainer can already see on GitHub.
