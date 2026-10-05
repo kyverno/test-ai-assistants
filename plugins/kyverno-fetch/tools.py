@@ -32,7 +32,14 @@ FETCH_PR_CANDIDATES_SCHEMA = _schema(
     "whether it's open, and its own labels — release-* lives here, not on the PR), and "
     "external_references: for a body reference ('Parent: #N', 'Depends on #N', ...) to a "
     "number outside this fetched set, its real kind/state/title. Cite that directly; never "
-    "tell the maintainer to go check it themselves. Pass changed_files/labels/base_branch/"
+    "tell the maintainer to go check it themselves. Also per PR: is_dependabot, merge_state "
+    "(GitHub's mergeStateStatus: CLEAN/BLOCKED/UNSTABLE/DIRTY/BEHIND), and copilot_review "
+    "(Copilot's latest verdict heading, whether it is the approving '🟢 Approved', its one-line "
+    "summary and finding count; null if Copilot hasn't reviewed). For a Dependabot PR: bumps "
+    "(each dependency's name/from/to/update_type/group, read from the commit trailers) and "
+    "semver_level (major/minor/patch, or unknown if any entry is unrecognized — the same rule "
+    "the triage workflow uses, so it is available before that workflow has labelled the PR). "
+    "Pass changed_files/labels/base_branch/"
     "head_branch/body/dependency_bumps and each closing issue's number into sequence_prs; "
     "everything else stays with you for citing when ordering within a tier.",
     {
@@ -42,7 +49,8 @@ FETCH_PR_CANDIDATES_SCHEMA = _schema(
             "description": "Extra GitHub search qualifiers beyond 'repo:/is:pr/is:open/"
             "draft:false', which this tool adds itself — e.g. 'label:ready-for-review', "
             "'label:ready-for-review milestone:\"Kyverno Release 1.20.0\"', "
-            "'label:needs-review', 'label:workflow-approval-required', 'author:someuser'.",
+            "'label:needs-review', 'label:workflow-approval-required', 'author:someuser', "
+            "'author:app/dependabot' (every open Dependabot PR, labelled or not).",
         },
         "limit": {
             "type": "integer",

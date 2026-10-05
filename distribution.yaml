@@ -28,5 +28,8 @@ env_requires:
     description: "owner/repo this assistant manages (default while prototyping: kyverno/test-ai-assistants)"
     required: true
   - name: ANTHROPIC_API_KEY
-    description: "Model provider key (swap via `hermes model` for a different provider)"
-    required: true
+    description: "Anthropic API key. Set this or COPILOT_GITHUB_TOKEN (at least one)."
+    required: false
+  - name: COPILOT_GITHUB_TOKEN
+    description: "Fine-grained PAT owned by your personal account with the Copilot Requests permission. Set this or ANTHROPIC_API_KEY (at least one)."
+    required: false

@@ -129,6 +129,9 @@ every session, this is reference):
   milestone — narrower than just having `milestone` set (step 3 above).
 - `major-bump`: permanent, paired with `needs-review` — an unconfirmed-or-major
   Dependabot bump.
+- `stale` / `no-stale`: `stale` is a daily workflow's mark on a `needs-author-action` PR
+  whose author hasn't pushed a commit in 14 days (never closes anything; Dependabot and
+  draft PRs are skipped). `no-stale` is a maintainer's exemption from it.
 - `ai-generated` / `spam`: CodeRabbit slop/spam-burst flags, not sequencing input.
 - `release-critical`/`-high`/`-medium`/`-low`: not in `.github/labels.yml` — no
   workflow applies or removes them. Still real: maintainers set these by hand on an

@@ -102,7 +102,39 @@ if [ -n "$MISSING" ]; then
   info "  ./scripts/install.sh $PROFILE"
   exit 0
 fi
+
+LLM_PROVIDER=$(python3 -c "
+values = {}
+with open('$ENV_FILE') as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, _, v = line.partition('=')
+        values[k.strip()] = v.strip()
+print('anthropic' if values.get('ANTHROPIC_API_KEY') else 'copilot' if values.get('COPILOT_GITHUB_TOKEN') else '')
+")
+
+if [ -z "$LLM_PROVIDER" ]; then
+  fail "$ENV_FILE has no model provider — set ONE of ANTHROPIC_API_KEY or COPILOT_GITHUB_TOKEN"
+  info ""
+  info "Fill one in, then re-run this script:"
+  info "  \$EDITOR $ENV_FILE"
+  info "  ./scripts/install.sh $PROFILE"
+  exit 0
+fi
 pass "all required credentials are filled in ($ENV_FILE)"
+
+# Profile updates reset config.yaml to the Anthropic default, so re-pin the
+# provider here on every run.
+if [ "$LLM_PROVIDER" = "copilot" ]; then
+  hermes -p "$PROFILE" config set model.provider copilot >/dev/null 2>&1 \
+    && hermes -p "$PROFILE" config set model.default claude-sonnet-4.6 >/dev/null 2>&1 \
+    && pass "model provider: GitHub Copilot (claude-sonnet-4.6)" \
+    || fail "couldn't set the Copilot provider — run: hermes -p $PROFILE config set model.provider copilot"
+else
+  pass "model provider: Anthropic (claude-sonnet-4-6)"
+fi
 
 # Hermes only substitutes ${HERMES_SKILL_DIR}/${HERMES_SESSION_ID} in SKILL.md
 # content — ${KYVERNO_REPO} etc. are never resolved by Hermes itself, so the

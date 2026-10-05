@@ -25,8 +25,7 @@ section. What follows here is what it's actually doing, for reference or
 manual use.
 
 `hermes profile install` does **not** prompt for or write any env vars —
-live-verified against a clean environment: it just installs the profile
-and tells you to copy `.env.EXAMPLE` to `.env`
+it just installs the profile and tells you to copy `.env.EXAMPLE` to `.env`
 (`~/.hermes/profiles/kyverno/.env` — separate from this repo, never
 committed) and fill in these yourself:
 
@@ -49,12 +48,11 @@ committed) and fill in these yourself:
   plus `groups:read`, `mpim:read`, `im:read` — the `slack` MCP server fetches
   all four Slack channel types in one call at boot regardless of what this
   profile uses, and fatally exits if any one scope is missing, even though
-  this profile only ever reads one public channel. Confirmed by running the
-  real container. Reinstall the app after subscribing to events or changing
-  scopes. Note: the `slack` MCP server validates its token at process
-  startup and exits immediately on an invalid one — a wrong/expired
-  `SLACK_BOT_TOKEN` means that container never starts, not that it starts
-  with reduced capability.
+  this profile only ever reads one public channel. Reinstall the app after
+  subscribing to events or changing scopes. The `slack` MCP server also
+  validates its token at process startup and exits immediately on an
+  invalid one — a wrong/expired `SLACK_BOT_TOKEN` means that container
+  never starts, not that it starts with reduced capability.
 - `SLACK_ALLOWED_USERS` — the installing maintainer's Slack member ID (keeps
   this instance answering only them).
 - `SLACK_HOME_CHANNEL` — the maintainers channel to read priority signals from
@@ -62,8 +60,12 @@ committed) and fill in these yourself:
 - `KYVERNO_REPO` — `owner/repo` this instance manages. Defaults to
   `kyverno/test-ai-assistants` while prototyping; repoint at `kyverno/kyverno`
   once validated.
-- `ANTHROPIC_API_KEY` — model provider key. Swap providers anytime with
-  `hermes model`, no config changes needed.
+- `ANTHROPIC_API_KEY` or `COPILOT_GITHUB_TOKEN` — set one. The installer
+  picks the provider from whichever is filled in (Anthropic if both).
+  `COPILOT_GITHUB_TOKEN` is a fine-grained PAT owned by your personal account
+  with the Account permission "Copilot Requests", and needs a Copilot seat
+  with Claude Sonnet enabled by your org admin. It is separate from
+  `GITHUB_TOKEN`, which stays the repo-scoped PAT for the GitHub tools.
 
 ## Run
 
@@ -85,11 +87,10 @@ hermes gateway install
 hermes gateway status   # confirm it's supervised and running
 ```
 
-Confirmed live: `~/.hermes/logs/gateway.log` should show `slack connected
-(profile: kyverno)`. A per-profile `hermes gateway run`/`install` fails on
-purpose (`exited with code 78`) once a host gateway exists — that's not a
-bug, it's the double-bind guard (two pollers on one bot token, port
-conflicts).
+`~/.hermes/logs/gateway.log` should show `slack connected (profile:
+kyverno)`. A per-profile `hermes gateway run`/`install` fails on purpose
+(`exited with code 78`) once a host gateway exists — that's the double-bind
+guard (two pollers on one bot token, port conflicts), not a bug.
 
 ## Update
 

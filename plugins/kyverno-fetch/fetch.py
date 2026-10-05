@@ -117,7 +117,9 @@ query($owner: String!, $name: String!, $number: Int!) {
       labels(first: 100) { pageInfo { hasNextPage } nodes { name } }
       files(first: 100) { pageInfo { hasNextPage } nodes { path } }
       reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
-      reviews(last: 50) { nodes { author { login } state } }
+      reviews(last: 50) { nodes { author { login } state submittedAt body } }
+      mergeStateStatus
+      bumpCommits: commits(first: 10) { nodes { commit { messageBody } } }
       commits(last: 1) { nodes { commit {
         statusCheckRollup {
           contexts(first: 100) {
@@ -168,6 +170,103 @@ def _compute_ci_state(contexts: list[dict]) -> str:
     return "SUCCESS"
 
 
+_SEMVER_LEVELS = ("major", "minor", "patch")
+_COPILOT_LOGIN_PREFIX = "copilot-pull-request-reviewer"
+_BUMP_BODY_PATTERNS = (
+    re.compile(r"Updates `([^`]+)` from (\S+) to (\S+)"),
+    re.compile(r"Bumps \[([^\]]+)\]\([^)]*\) from (\S+) to (\S+)"),
+)
+
+
+def _parse_trailer_bumps(commit_bodies: list[str]) -> list[dict[str, Any]]:
+    """Every `updated-dependencies:` entry across all commits (a rebase can move the block off
+    the tip). Later commits win on a repeated name."""
+    by_name: dict[str, dict[str, Any]] = {}
+    for text in commit_bodies:
+        in_block = False
+        cur: Optional[dict[str, Any]] = None
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped == "updated-dependencies:":
+                in_block = True
+                continue
+            if not in_block:
+                continue
+            if stripped in ("...", "---"):
+                in_block = False
+                cur = None
+                continue
+            m = re.match(r"^-\s+([\w-]+):\s*(.*)$", line)
+            if m:
+                cur = {}
+                cur[m.group(1)] = m.group(2).strip()
+                if m.group(1) == "dependency-name":
+                    by_name[cur["dependency-name"]] = cur
+                continue
+            m = re.match(r"^\s+([\w-]+):\s*(.*)$", line)
+            if m and cur is not None:
+                cur[m.group(1)] = m.group(2).strip()
+    return [
+        {
+            "name": name,
+            "to": e.get("dependency-version"),
+            "update_type": e.get("update-type"),
+            "group": e.get("dependency-group"),
+        }
+        for name, e in by_name.items()
+    ]
+
+
+def _semver_level(bumps: list[dict[str, Any]]) -> str:
+    """Same rule as dependabot-merge-triage.yaml: unknown unless every entry has a recognized
+    semver level, otherwise the highest across them."""
+    if not bumps:
+        return "unknown"
+    levels = []
+    for b in bumps:
+        ut = b.get("update_type") or ""
+        m = re.fullmatch(r"version-update:semver-(major|minor|patch)", ut)
+        if not m:
+            return "unknown"
+        levels.append(m.group(1))
+    return next(l for l in _SEMVER_LEVELS if l in levels)
+
+
+def _dependabot_bumps(commit_bodies: list[str], pr_body: str) -> list[dict[str, Any]]:
+    bumps = _parse_trailer_bumps(commit_bodies)
+    froms: dict[str, str] = {}
+    for pat in _BUMP_BODY_PATTERNS:
+        for name, old, _new in pat.findall(pr_body):
+            froms.setdefault(name, old)
+    for b in bumps:
+        b["from"] = froms.get(b["name"])
+    return bumps
+
+
+def _copilot_review(reviews: list[dict]) -> Optional[dict[str, Any]]:
+    """Latest Copilot review, read the way dependabot-merge-triage.yaml reads it: the `###`
+    heading in its body is the verdict, and `### 🟢 Approved` is the only approval."""
+    mine = [r for r in reviews if (r["author"] or {}).get("login", "").startswith(_COPILOT_LOGIN_PREFIX)]
+    if not mine:
+        return None
+    last = mine[-1]
+    body = last.get("body") or ""
+    heading = re.search(r"^###\s+(.+)$", body, re.M)
+    summary = None
+    if heading:
+        after = body[heading.end():].strip().splitlines()
+        summary = next((l.strip() for l in after if l.strip()), None)
+    findings = re.search(r"\*\*Findings:\*\*\s*(\d+)", body)
+    return {
+        "verdict": re.sub(r"^[^\w]+", "", heading.group(1)).strip() if heading else None,
+        "approved": "### 🟢 Approved" in body,
+        "summary": summary,
+        "findings": int(findings.group(1)) if findings else None,
+        "submitted_at": last.get("submittedAt"),
+        "reviews_by_copilot": len(mine),
+    }
+
+
 def _fetch_one(owner: str, name: str, number: int) -> dict[str, Any]:
     data = _graphql(_DETAIL_QUERY, {"owner": owner, "name": name, "number": number})
     pr = data["repository"]["pullRequest"]
@@ -182,6 +281,15 @@ def _fetch_one(owner: str, name: str, number: int) -> dict[str, Any]:
         r["author"] and r["author"]["login"] == "coderabbitai" and r["state"] == "APPROVED"
         for r in reviews
     )
+    author_login = (pr["author"] or {}).get("login")
+    is_dependabot = author_login in ("dependabot", "dependabot[bot]", "app/dependabot")
+    bumps = (
+        _dependabot_bumps(
+            [n["commit"]["messageBody"] or "" for n in pr["bumpCommits"]["nodes"]], pr["body"] or ""
+        )
+        if is_dependabot
+        else []
+    )
     commit_nodes = pr["commits"]["nodes"]
     rollup = (commit_nodes[0]["commit"]["statusCheckRollup"] or {}) if commit_nodes else {}
     contexts_conn = rollup.get("contexts") or {"nodes": [], "pageInfo": {"hasNextPage": False}}
@@ -191,7 +299,13 @@ def _fetch_one(owner: str, name: str, number: int) -> dict[str, Any]:
         "title": pr["title"],
         "url": pr["url"],
         "body": pr["body"] or "",
-        "author": (pr["author"] or {}).get("login"),
+        "author": author_login,
+        "is_dependabot": is_dependabot,
+        "merge_state": pr["mergeStateStatus"],
+        "copilot_review": _copilot_review(reviews),
+        "dependency_bumps": [b["name"] for b in bumps],
+        "bumps": bumps,
+        "semver_level": _semver_level(bumps) if is_dependabot else None,
         "author_association": pr["authorAssociation"],
         "created_at": pr["createdAt"],
         "base_branch": pr["baseRefName"],

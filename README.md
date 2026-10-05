@@ -19,7 +19,12 @@ plan), which is the bar for graduating to a dedicated
 - [Docker](https://docs.docker.com/get-docker/), running — the GitHub and
   Slack tools each run as their own container, no separate install.
 - The [Hermes CLI](https://hermes-agent.nousresearch.com) on your `PATH`.
-- An Anthropic API key (or any provider Hermes supports).
+- A model provider — either one:
+  - an Anthropic API key, or
+  - a GitHub Copilot seat with Claude Sonnet enabled, plus a fine-grained PAT
+    owned by your **personal** account (not an org) with the Account
+    permission **Copilot Requests**. This is a separate token from the one
+    in step 3.
 
 ### 2. Clone this repo
 
@@ -83,7 +88,8 @@ done and only does what's left:
 - First run installs the profile, then stops and tells you exactly which
   credentials to fill in at `~/.hermes/profiles/kyverno/.env` (copied
   there from `.env.EXAMPLE`): your GitHub token, `MAINTAINER_GITHUB_LOGIN`,
-  `KYVERNO_REPO`, your Anthropic key, and — if you did step 4 — the four
+  `KYVERNO_REPO`, one model provider (`ANTHROPIC_API_KEY` or
+  `COPILOT_GITHUB_TOKEN`), and — if you did step 4 — the four
   Slack values. Full detail on each var: `docs/deployment.md`.
 - Fill those in, then run `./scripts/install.sh` again. It installs the
   messaging gateway (only if you set up Slack), then sanity-checks the
@@ -123,22 +129,29 @@ Want a different time or channel? `hermes cron edit kyverno-review-digest`.
 
 ## What it does
 
-Fetches every open PR carrying a readiness label (never a hardcoded name —
-`kyverno-context` resolves the real label set live) and builds one ranked
-merge-sequence recommendation: stacked-PR ordering, generated-file
-conflicts, package overlap, milestone-alignment, and per-PR post-merge CI
-risk, human and Dependabot PRs together (`pr-queue`). Diagnoses a
-Dependabot PR's actual blocker instead of reporting a bare label, and gives
-a major-version bump real blast-radius via real call sites and the
-dependency's own release notes. Explains any PR on request — short by
-default, deeper (review threads, risk, a suggested action, Slack context)
-on request — synthesizing Copilot/CodeRabbit review output, and answers
-open-ended questions about the repo or queue by looking things up rather
-than guessing (`docs/architecture.md`, "Maintainer questions are
-open-ended"). Labels, comments, requests changes, approves, and catches a
-PR's branch up with its base (`pr-actions`) using the maintainer's own
-credentials — note that's a GitHub-API merge-update, not a git rebase, even
-when a maintainer asks to "rebase"; see that skill for why.
+- Fetches every open PR matching a stated focus (milestone/author/area/label — never a
+  hardcoded label name, `kyverno-context` resolves the real set live) in one batched call
+  (`kyverno-fetch`), human and Dependabot PRs together.
+- Builds a dependency graph and layers it into tiers — stacked PRs, generated-file
+  conflicts, explicit body references, closing-issue conflicts (`kyverno-sequencer`) —
+  then orders within each tier by a precedence ladder (closing-issue severity, milestone
+  proximity, CodeRabbit approval + unresolved threads, author association, size) and names
+  the reason for every position (`pr-queue`).
+- Checks Slack and GitHub Discussions for context on a PR or the queue as a whole, and the
+  live e2e-gate status per target branch — independent of `ready-for-review`, never
+  conflated with it.
+- Asked about Dependabot specifically, reviews every open Dependabot PR and says which to
+  merge now, fix first, review yourself, wait on, or close — with real call sites, release
+  notes, and Copilot's findings.
+- Explains any PR on request — short by default, deeper (review threads, risk, a suggested
+  action, Slack/Discussions context) on request — and answers open-ended questions about the
+  repo or queue by looking things up rather than guessing (`docs/architecture.md`,
+  "Maintainer questions are open-ended").
+- Labels, comments, requests changes, approves, and catches a PR's branch up with its base
+  (`pr-actions`) using the maintainer's own credentials — a GitHub-API merge-update, not a
+  git rebase, even when asked to "rebase"; see that skill for why.
+- Reads and answers GitHub Discussions, drafting a reply and waiting for confirmation before
+  posting (`discussions`).
 
 **Cannot merge** — no merge tool exists in its toolset, enforced in three
 independent layers. See `docs/architecture.md`.
@@ -149,13 +162,15 @@ patterns, retrieved automatically where relevant (e.g. flagging post-merge
 risk with real cited history, not just "no data"). See
 `docs/capabilities.md`'s "Remembering things across sessions".
 
+`docs/workflow.md` is the full target workflow (issue triage, a dashboard, session
+open/close) and its own "Build plan" section tracks what's built against what's still ahead.
+
 ## Layout
 
 - `distribution.yaml` — install manifest: name, version, required env vars.
-- `scripts/install.sh` — idempotent installer: `ortools` (for
-  `sequence_prs`'s CP-SAT solver), profile install, credential check,
-  gateway install, toolset sanity checks. Re-run after each step it asks
-  for (see Setup step 5).
+- `scripts/install.sh` — idempotent installer: profile install, credential
+  check, gateway install, AGENTS.md cache seeding, toolset sanity checks.
+  Re-run after each step it asks for (see Setup step 5).
 - `SOUL.md` — the agent's identity and boundaries.
 - `config.yaml` — model default, the GitHub/Slack MCP server declarations
   (`mcp_servers:`), and the hand-picked tool allowlist. Security-critical,
@@ -165,11 +180,15 @@ risk with real cited history, not just "no data"). See
 - `hooks/block-mnemosyne-triples.sh` — a `pre_tool_call` backstop that
   restricts the memory plugin's `triple_add` tool to the exact set of facts
   this distribution actually writes.
-- `plugins/kyverno-sequencer/` — a bundled Hermes plugin (not a skill),
-  registering `sequence_prs`: deterministic candidate merge-sequencing —
-  file-risk classification, a hard-precedence graph, cycle detection, and a
-  weighted CP-SAT rank solve — that `pr-queue` calls and then checks
-  against context the tool can't see. See `docs/architecture.md`.
+- `plugins/kyverno-fetch/` — a bundled Hermes plugin registering
+  `fetch_pr_candidates`/`fetch_file_diff_overlap`: one batched call over
+  GitHub's GraphQL/REST APIs in place of a search-plus-per-PR-read sequence.
+  See `docs/architecture.md`.
+- `plugins/kyverno-sequencer/` — a bundled Hermes plugin registering
+  `sequence_prs`: a hard-dependency graph (stacked branches, generated-file
+  ordering, explicit references, closing-issue conflicts), cycle detection,
+  and topological layering into tiers — `pr-queue` orders within each tier
+  itself. See `docs/architecture.md`.
 - `cron/jobs.json` — scheduled jobs the distribution ships: a weekday
   review digest posted to Slack, and two silent background jobs that keep
   memory current (`kyverno-memory-sweep`, `kyverno-memory-consolidate`).
@@ -177,11 +196,11 @@ risk with real cited history, not just "no data"). See
   step 7).
 - `skills/kyverno-context/` — dynamically-resolved labels/CODEOWNERS
   (never hardcoded — re-resolved live every session) plus Kyverno's real
-  codegen fan-out and pre-/post-merge CI split, and on-demand doc lookup
-  via `search_code`.
-- `skills/pr-queue/` — fetch, filter, rank, and explain the review queue;
-  tools + fixed facts + "look, don't guess," not a fixed script per
-  question (see `docs/architecture.md`).
+  codegen fan-out, pre-/post-merge CI split, and e2e-gate mechanics.
+- `skills/pr-queue/` — fetch, tier, and explain the review queue: the
+  precedence ladder, Slack/Discussions context, gate check, and per-PR
+  review briefs — tools + fixed facts + "look, don't guess," not a fixed
+  script per question (see `docs/architecture.md`).
 - `skills/pr-actions/` — label/comment/request-changes/approve/branch-update,
   all via the maintainer's own token; explicit about what it can't do
   (merge, true rebase, post-merge CI monitoring) and why.
@@ -190,10 +209,12 @@ risk with real cited history, not just "no data"). See
   answer is visible to the whole community, not just the maintainer.
 - `docs/architecture.md` / `docs/deployment.md` — design and install runbook.
 - `docs/capabilities.md` — a tour of what it can do, with example prompts.
+- `docs/workflow.md` — the target maintainer workflow (PR work, issue work,
+  session open/close, the dashboard) and, in its own "Build plan" section,
+  the current phased plan for what's not built yet.
 - `docs/test-scenarios.md` — the fake PR/issue/CODEOWNERS environment built
   on this repo for exercising the skills against realistic-shaped data.
-- `docs/v2-plan.md` — the intelligent merge-sequencing plan for the next
-  phase: what's already built, what needs verifying before implementing,
-  and the phased build-out (written to be picked up cold in a new session).
+- `docs/testing-guide.md` — prompts exercising every capability above,
+  grounded in real counts on `kyverno/kyverno`.
 - `docs/archive/` — operational notes from the abandoned `kyctrl` design
   this repo previously held (kept for reference, not part of this project).

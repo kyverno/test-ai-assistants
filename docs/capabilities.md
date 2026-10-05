@@ -7,32 +7,35 @@ tool-by-tool detail behind each example.
 
 ## Building a merge-sequence recommendation
 
-> **You:** build the merge sequence
+> **You:** what's my PR queue
 
-It fetches every open PR carrying `ready-for-review` or `needs-review`
-(human and Dependabot together), classifies their changed files
-(generated/interface/test-only), builds a conflict graph, and returns one
-ordered list — not a bare sort:
+First asks what today's focus is (a milestone, author, area, or fork PRs
+needing workflow approval) — never defaults to "all PRs" or oldest-first.
+Then fetches every matching PR in one batched call (human and Dependabot
+together), builds the real dependency graph, and returns **tiers** — PRs
+structurally free to review now, then PRs that must wait:
 
-> 1. **#4181** — closes the active milestone's tracked issue directly.
-> 2. **#4176** — stacked on #4181 (base branch is #4181's head); must land
->    after it regardless of anything else.
-> 3. **#4190** — touches `api/kyverno/v2/*_types.go`; ordered ahead of
->    #4188 below since it's the codegen-input side of a generated-file
->    conflict.
-> 4. **#4188** — conflicts with #4190 on `zz_generated.deepcopy.go`;
->    sequenced after it for that reason.
-> 5. **#4172** (Dependabot, `needs-review`) — Copilot's review requested a
->    changelog note; not a CI failure or conflict.
-> 6. **#4165** (Dependabot, `major-bump`, `needs-review`) — bumps
->    `github.com/go-logr/logr` v1→v2; `search_code` finds 6 real call sites
->    in `pkg/logging` and `pkg/webhooks` that would need review, cited by
->    file and line, plus the dependency's own release notes for what
->    actually changed.
+> **Tier 1**
+> 1. **#17860** — admission-controller crash (`fatal error: concurrent map
+>    writes`), `CRITICAL` by its closing issue, MEMBER author,
+>    CodeRabbit-approved. Ranked first: severity outranks everything below it.
+> 2. **#17857** — real 1.19 regression, cherry-pick requested (`HIGH`).
+> 3. **#17831** / **#17838** — same author, same file, routine CLI fix;
+>    presented together as one cluster rather than two separate positions.
+>
+> **Tier 2** (waits on Tier 1's generated-file/stacked-branch edges)
+> 4. **#17669** — generated-input PR; #17000/#17540/#17770/#17778 must
+>    follow it for that reason, stated explicitly, not guessed at.
 
-Every position carries its reason inline. A cycle (two PRs each needing
-the other to land first) gets named explicitly and handed back to you
-rather than guessed at.
+A cycle (two PRs each needing the other first) or two PRs closing the same
+issue gets named explicitly as `unresolved`, never silently ordered. Within
+a tier, ordering follows a strict ladder — closing-issue severity, then
+milestone proximity, then CodeRabbit-approved-with-zero-unresolved-threads,
+then author association (MEMBER > CONTRIBUTOR > FIRST_TIME_CONTRIBUTOR),
+then size as a pure tiebreak — and the reason is always named, never a bare
+position. A PR flagged `CHANGES_REQUESTED` by CodeRabbit never lands in an
+"approve now" grouping regardless of how urgent its milestone is — readiness
+and priority are kept as separate axes on purpose.
 
 ## Explaining a specific PR
 
@@ -44,17 +47,33 @@ per their actual division of labor (CodeRabbit: security/lint/codegen
 freshness; Copilot: logic/architecture/cross-file impact).
 
 > **You:** explain PR #4181, and check if anything's risky or being
-> discussed in Slack
+> discussed in Slack or Discussions
 
 Same brief, plus: which review threads are still unresolved and who owes a
 response, post-merge risk (does it touch `pkg/engine`/`pkg/cel`/other
-surface only the post-merge suites exercise, and is an `e2e-failure` issue
-currently open for the target branch), a suggested action (approve /
-request changes / wait on CI / needs author to resolve threads), and
-whatever the maintainers' Slack channel says about it in the window
-checked — cited by message, not a bare "yes/no."
+surface only the post-merge suites exercise, any real incident history for
+that package cited by PR and date, and is an `e2e-failure` issue currently
+open for the target branch — stated independently of `ready-for-review`,
+never conflated with it), a suggested action (approve / request changes /
+wait on CI / needs author to resolve threads), and whatever the
+maintainers' Slack channel or GitHub Discussions say about it in the window
+checked — cited by message/thread, not a bare "yes/no." Checking either one
+and finding nothing is reported as "not found there," not "never discussed."
 
 ## Dependabot and duplicate-effort checks
+
+> **You:** which Dependabot PRs should I review and merge?
+
+Looks at every open Dependabot PR — labelled or not — and gives each exactly one
+verdict, with timing: **merge now** (patch/minor, clean, Copilot approving, no risky
+call sites), **fix first** (a named blocker such as a conflict or a Copilot finding
+that needs a code change), **your review** (major bumps, risky call sites, or a
+Kubernetes/`kyverno/api` bump that needs regenerated code), **wait**, or
+**close/ignore** (a duplicate, or a bump you already decided against). Each one cites
+the real call sites in the repo, the release notes, Copilot's findings, the failing
+check if any, what it came after, and which other open PRs it blocks or waits on.
+Security fixes sort first. It never merges — that click is yours.
+
 
 > **You:** does #4172 need anything from me right now?
 

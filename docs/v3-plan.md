@@ -1,67 +1,228 @@
-# v3 plan: pointer only
+# v3 plan
 
-Not scoped yet. Things to pick up later:
+What to build after the current four skills (`kyverno-context`, `pr-queue`,
+`pr-actions`, `discussions`) and two plugins (`kyverno-fetch`, `kyverno-sequencer`).
+Every "verified" note below was checked against the real repo, API, or Hermes source
+in 2026-10; anything unverified is marked as such and is the first task of its item.
 
-- **Run the gateway in Docker instead of on each maintainer's machine.**
-  Hermes ships its own `Dockerfile`/`docker-compose.yml` for this
-  (`~/.hermes` mounted as a volume, `network_mode: host`) — not something
-  we'd build ourselves. Needs the host Docker socket mounted in, since
-  Hermes would then be spawning the github/slack MCP containers as
-  siblings from inside its own container — verify that's wired before
-  relying on it. Not needed while each maintainer runs their own local
-  install; becomes relevant once one instance needs to serve multiple
-  orgs/maintainers from shared infra.
+## Where the project stands
 
-- **A real dashboard.** Not a claude.ai artifact — that capability doesn't
-  exist for Hermes. The real mechanism is Hermes's own local dashboard-
-  plugin system (`hermes dashboard`, `localhost:9119`): a plugin ships
-  `dashboard/manifest.json` plus a JS bundle to add a tab. Deferred —
-  it needs a frontend build step, and its plugin-loading path has a
-  documented, patched RCE history, so it deserves its own careful pass
-  rather than being folded into this one.
+| Layer | What exists |
+|---|---|
+| Install | `scripts/install.sh` — idempotent profile install/update, Anthropic **or** GitHub Copilot as the model provider, Slack gateway, sanity checks |
+| Data | `fetch_pr_candidates` (one GraphQL pass per PR, concurrent): labels, files, CI, threads, CodeRabbit + Copilot verdicts, merge state, Dependabot bumps and semver level |
+| Structure | `sequence_prs` — hard-edge graph (stacked, generated-file, body reference, closing-issue conflict), tiers, overlaps, e2e-gate state |
+| Skills | `pr-queue` (merge sequence, review briefs, **Dependabot queue**), `pr-actions`, `discussions`, `kyverno-context` |
+| Memory | built-in MEMORY/USER slots + Mnemosyne (incidents, rejections, contributor patterns) |
+| Cron | review digest, memory sweep, memory consolidate — all ship paused |
+| Safety | no merge tool (allowlist + token scope + fail-closed hook); no terminal/file/browser tools |
 
-- **`gopls` MCP integration for real interface/call-graph edges.** The
-  sequencer's hard-edge detection is deliberately limited to what's
-  mechanically derivable (stacked branches, generated-file ordering,
-  explicit body references, closing-issue conflicts) — it doesn't try to
-  approximate "which PR's diff implies which other PR must come first"
-  from a text search. A `gopls`-backed MCP server would give `sequence_prs`
-  a real semantic edge type for that, on top of the tiered graph this pass
-  built. Build after the current four are tested in real use.
+## Order of work
 
+| # | Item | Size | Needs first |
+|---|---|---|---|
+| 1 | Dependabot queue — follow-ups | S–M | — |
+| 2 | Maintainer-ownership signal (CODEOWNERS) | S | — |
+| 3 | Security alerts and vulnerabilities | M | token-access test (below) |
+| 4 | Semantic cross-PR analysis | L | a decision on where analysis runs (below) |
+| 5 | Local dashboard | M | — |
+| 6 | Gateway in Docker | M | the deployment-model decision in `to-do.md` |
 
-# to fix:
-  1. CODEOWNERS / "is the maintainer actually a requested reviewer" is never used. kyverno-context resolves this, but
-     pr-queue's procedure never calls it. For a personal assistant, "is this even mine to review" seems like it should matter,
-     and right now it doesn't factor in at all.
-  3. The security/code-scanning/Dependabot alert tools are granted but never called anywhere in the Procedure. Same story —
-     listed as available, zero instructions on when to actually use them.
-     we also want to see the securities and vulnerabilities posted , see their criticalities, should we raise any issues for the same, should we fix , and we should ammend the agents.md files maybe in kyverno to flag them , and maybe we should add some instructions for coderabbit to flag it as well
-# Semantic PR Intelligence: What Actually Works for Go
+---
 
-The ecosystem for semantic Go PR analysis is fragmented but has several genuinely useful layers, and the honest answer is this: **you can get meaningful semantic signal today without waiting for a perfect tool**, by combining two or three readily available components — but the "holy grail" of fully automated semantic conflict detection between arbitrary PRs doesn't exist yet as a turnkey solution. The best immediately deployable approach for a Hermes profile targeting kyverno is **ast-grep (via its official MCP server) for syntactic caller detection**, paired with **go-apidiff for public API break detection between branches**, with **gopls/mcp-language-server as an optional higher-fidelity layer for maintainers willing to run `go mod download` per worktree**. Each tool has a clear niche, clear limits, and a practical installation path.
+## 1. Dependabot queue — follow-ups
 
-## gopls delivers call-site intelligence but needs deps resolved
+**In place:** asking "which Dependabot PRs should I review or merge" runs
+`pr-queue`'s "Procedure: Dependabot queue". It fetches every open Dependabot PR by
+author (labels lag the triage sweep, which runs every two hours), reads each PR's
+semver level, call sites, release notes, CI cause and Copilot findings, relates it to
+sibling bumps and other open PRs, and gives one verdict per PR — merge now, fix first,
+your review, wait, close/ignore — with timing. The maintainer does the merge.
 
-**gopls** (the official Go language server) is the highest-fidelity tool available for understanding semantic relationships in Go code. Via its LSP JSON-RPC protocol, it supports `textDocument/references` (every call site of a symbol across the whole workspace), `callHierarchy/incomingCalls` and `callHierarchy/outgoingCalls` (full bidirectional call graph), and `textDocument/implementation` (which concrete types implement a given interface). Two ready-made MCP servers wrap gopls: **mcp-gopls** (`github.com/hloiseaufcms/mcp-gopls`, exposing `find_references`, `go_to_definition`, `get_hover_info`, `check_diagnostics`, `analyze_coverage`) and **mcp-language-server** (`github.com/isaacphi/mcp-language-server`, exposing `definition`, `references`, `diagnostics`, `hover`, `rename_symbol`, `edit_file`). Both install with a single `go install` command and configure via workspace path + GOPATH env vars. The critical constraint is that **gopls uses `go/packages` with `NeedTypes`/`NeedTypesInfo`, which requires `go list` to succeed** — meaning the PR branch needs its dependencies resolved (`go mod download` or vendor/) but does NOT need `go build` to produce binaries. On a kyverno-scale repo with vendored deps, this is fast. On a PR branch without vendor/, you pay ~30–60s of `go mod download` per worktree. Neither MCP server currently exposes call hierarchy as a tool (only `find_references`), so the highest-value gopls feature for PR sequencing — "what calls the function being changed in PR A" — IS available, but `callHierarchy/incomingCalls` requires writing a thin custom MCP plugin or calling the LSP directly. `([gopls navigation features](https://go.dev/gopls/features/navigation))` `([mcp-gopls](https://playbooks.com/mcp/hloiseaufcms-gopls))` `([mcp-language-server](https://playbooks.com/mcp/isaacphi-language-server))`
+**Next:**
 
-## ast-grep gives fast syntactic caller detection with no build step
+- **Scheduled digest.** A fourth cron job, weekdays, posting only the *merge now* and
+  *your review* groups with one line each. Ships paused like the others.
+- **Alert-aware priority.** Security fixes already sort first when a PR carries
+  `security` or names a `GHSA-`/`CVE-` ID. Item 3 adds severity from real alert data.
+- **Real blast radius.** Call-site evidence is a text search of the default branch.
+  Item 4's `govulncheck`/`go_symbol_references` replaces it with symbol-level
+  reachability for the dependencies that matter (`k8s.io/*`, `github.com/kyverno/api`,
+  anything under `pkg/engine`/`pkg/cel`).
+- **Decision memory.** Persist "skip this major until X" per dependency
+  (`mnemosyne_remember`) so a repeated Dependabot PR isn't re-litigated; the
+  procedure already recalls it.
 
-**ast-grep** is the practical no-build alternative that still provides meaningfully more than text search. It parses Go source code into ASTs and lets you match structural patterns — `find_code` and `find_code_by_rule` across a codebase — without invoking the Go toolchain at all. The **official ast-grep MCP server** (`github.com/ast-grep/ast-grep-mcp`) exposes four tools: `dump_syntax_tree`, `test_match_code_rule`, `find_code`, and `find_code_by_rule`. Installation requires the ast-grep binary (via `brew install ast-grep` or `cargo install ast-grep`) plus `uvx` for the Python MCP runner. The workflow for PR sequencing: extract the function/method names being added, removed, or renamed in a PR diff, then run `find_code` with a structural pattern like `changedMethod($$$)` across the main branch (or another PR's branch) to find all call sites. This won't resolve types — a pattern `Reconcile($$$)` will match ANY method named Reconcile, not just kyverno's specific one — but for a codebase where naming is reasonably unique (which kyverno's internal package names largely are), this catches the majority of meaningful cross-PR interactions. Critically, **this works on a raw git worktree without any module setup**, making it viable for scanning all 107 open PR branches efficiently. `([ast-grep MCP](https://github.com/ast-grep/ast-grep-mcp))` `([ast-grep overview](https://news.ycombinator.com/item?id=38590984))`
+**Done when:** the digest runs for a week of real PRs and every "merge now" PR it named
+merged without a follow-up revert.
 
-## go-apidiff catches the highest-risk ordering constraint: public API breaks
+## 2. Maintainer-ownership signal (CODEOWNERS)
 
-**go-apidiff** (`github.com/joelanford/go-apidiff`) is a CLI tool that compares exported Go API compatibility between two git commits. Run `go-apidiff main pr-branch-sha` and it outputs categorized breaking vs compatible changes — removed exports, changed method signatures, type incompatibilities. It uses `go/packages` with type parsing so it needs deps resolved, but no binary compilation. **relimpact** (from kitemetric.com) does the same thing with broader scope (API changes + doc changes + file changes by type) and accepts `--old`/`--new` git refs including branch names. Either tool answers the question: "does PR A remove or break a public symbol that any other PR might depend on?" For kyverno, where many PRs add new types to `api/*_types.go` and others add controllers that use those types, this is directly actionable: if go-apidiff shows a type removal or signature change between a PR and main, any other open PR touching files that import the affected package has a potential ordering constraint. This is the complement to the Hermes plugin's generated file ordering (which already handles `api/*_types.go → zz_generated.*`) by catching the inverse case: API breaks that the generated files don't reflect. `([go-apidiff](https://beta.pkg.go.dev/github.com/joelanford/go-apidiff@v0.4.0))` `([relimpact](https://kitemetric.com/blogs/introducing-relimpact-a-blazing-fast-release-impact-analyzer-for-go))`
+**Gap:** `pr-queue` never asks whether a PR is the maintainer's to review, though
+`kyverno-context` can resolve CODEOWNERS.
 
-## SCIP-go is the richest source of truth but needs a pipeline
+**Verified:** kyverno's CODEOWNERS opens with `* @kyverno/kyverno-core-maintainers`,
+then path rules naming individuals (`/pkg/engine @eddycharly @realshuting
+@MariamFahmy98 …`). GitHub requests every matching owner, so each open PR lists the
+whole team plus the path owners as requested reviewers. Two consequences:
 
-**scip-go** (Sourcegraph's official Go SCIP indexer) produces an `index.scip` file containing every symbol definition and reference with type resolution — the closest thing to a ground-truth semantic index of a Go codebase. It correctly handles interface dispatch, type aliases, and cross-package calls in ways that tree-sitter and ast-grep cannot. However, it **requires a functioning Go build environment** (the Sourcegraph docs explicitly note it must run after Go environment setup), takes 30–90 seconds on a kyverno-scale codebase, and has no off-the-shelf MCP wrapper for PR comparison. Two community projects build on SCIP toward MCP: **synaptic-scip** (`github.com/IEatCodeDaily/synaptic-scip`) combines tree-sitter extraction with scip-go semantic enrichment and exposes 29 MCP tools including explicit PR review and impact analysis tools; **codegraph** (`github.com/techsavvyash/codegraph`) stores scip-go output in Neo4j and exposes 9 MCP tools for path finding, impact analysis, and Cypher queries. The base **synaptic/CodeGraph** tool (colinvaughn variant) skips SCIP and uses tree-sitter only, gives 29 MCP tools including callers, reverse dependencies, and change forecasting, and requires NO build step — making it the most immediately deployable graph-based tool. The tradeoff: tree-sitter analysis misses dynamic dispatch and interface polymorphism. For kyverno's reconciler-heavy codebase, where much of the important logic flows through `client.Get`/`client.Update` calls on specific types, this ambiguity matters. `([synaptic-scip](https://github.com/IEatCodeDaily/synaptic-scip))` `([codegraph SCIP+Neo4j](https://github.com/techsavvyash/codegraph))` `([scip-go indexing](https://sourcegraph.com/docs/code-navigation/how-to/index-a-go-repository))`
+- Team membership alone is always true for a core maintainer, so it carries no signal.
+  The signal is a *path-specific* rule that names the maintainer.
+- `reviewRequests` shrinks as people review, so it can't be the source of truth.
 
-## The tools that don't help with cross-PR semantics
+**Approach:** compute ownership deterministically inside `kyverno-fetch`: read
+`CODEOWNERS` once per call, apply last-match-wins to each PR's `changed_files`, resolve
+team membership once (org Members read is already in the token's scopes), and return
+`ownership` per PR — `direct` (a specific rule names the maintainer), `team-only`
+(only the catch-all), or `none`. In `pr-queue`, `direct` ranks above `team-only` inside
+a tier as a stated reason and is never a filter; `none` PRs are named, not hidden.
 
-Several candidates turn out to be dead ends for this use case. **staticcheck** and **golangci-lint** are purely single-codebase tools — they report issues within a codebase but have no concept of comparing two branches or detecting cross-PR semantic interactions. **difftastic** makes individual diffs more readable (structural rather than line-by-line) but has no PR-to-PR comparison capability. **GitHub's API** is at its ceiling with file-level data — it provides no function-level call graph, no symbol references, and no semantic dependency information; the dependency graph API tracks only package-level go.mod dependencies. **semamerge** (MCP server for semantic merge conflict detection) is TypeScript-only and not applicable to Go. **go/callgraph** (the `cmd/callgraph` CLI from `golang.org/x/tools`) generates a full program call graph but requires a complete build environment, is expensive on large codebases (VTA analysis on kyverno would likely OOM or take many minutes), and produces a single monolithic graph with no built-in PR comparison mechanism. **The golang guru/oracle tool is effectively retired**, replaced by gopls. `([difftastic](https://github.com/Wilfred/difftastic))` `([go/callgraph](https://pkg.go.dev/golang.org/x/tools/go/callgraph))` `([semamerge](https://mcp.so/servers/semamerge))`
+**Done when:** a maintainer who owns only `/pkg/cel` sees PRs touching it ranked as
+theirs, with the matched rule cited.
 
-## Conclusion
+## 3. Security alerts and vulnerabilities
 
-The realistic bang-for-buck recommendation for a Hermes AI agent profile targeting kyverno is a **three-layer stack, incrementally adoptable**: (1) **ast-grep MCP** as the zero-setup baseline — install it once globally, run structural pattern searches across PR branches without any module setup, catch the majority of cross-PR call-site overlaps in seconds; (2) **go-apidiff or relimpact** as a per-PR gate — run it between main and each PR branch (requires `go mod download` once), output the breaking API changes, and flag any other open PR importing the affected packages as potentially dependent; (3) **mcp-language-server (gopls)** for deep interactive analysis when a maintainer wants to understand a specific conflict — configure it once per repo, use `find_references` for any symbol to get type-resolved caller locations across the workspace. The synaptic/CodeGraph tool is worth watching but is tree-sitter-only in its current no-build form, which limits precision for Go's interface-heavy code patterns. The scip-go + synaptic-scip pipeline offers the highest fidelity but requires a build step and custom integration work. None of the three recommended tools require changes to the kyverno repo itself, and all are installable by a maintainer in under 10 minutes alongside a Hermes profile.
+**Gap:** `list_code_scanning_alerts`, `list_dependabot_alerts`,
+`list_secret_scanning_alerts` and their `get_*` tools are granted but only the
+Dependabot queue calls one.
 
+**Verified:**
+
+- With a non-collaborator token, `dependabot/alerts` and `code-scanning/alerts` return
+  403 and `secret-scanning/alerts` returns 404 on `kyverno/kyverno`. **Unverified:**
+  whether a core maintainer's token can read them. Test this first with a real
+  maintainer token; the design below has a public-data path either way.
+- Kyverno's disclosure policy (`kyverno/community` `SECURITY.md`): vulnerabilities in
+  Kyverno are reported by email to `kyverno-security@googlegroups.com`, not as issues;
+  a vulnerability in a dependency is reported to that project.
+- `.coderabbit.yaml` already has a `kind/security` labeling instruction, a "Security
+  label gate" pre-merge warning, and a root instruction to focus on security
+  vulnerabilities. It reads the root `AGENTS.md` before every review.
+
+**Approach — a `security` procedure in `pr-queue`:**
+
+1. List open alerts by severity. If the token can't read them, query public advisory
+   data per module@version (OSV or the Go vulnerability database) from a
+   `kyverno-fetch`-style plugin tool; `go_vulncheck` (item 4) adds whether a vulnerable
+   symbol is reachable from Kyverno's code.
+2. For each alert, state criticality (severity × reachability), whether an open PR
+   already fixes it (a Dependabot bump → *merge now*), and whether an open issue
+   already tracks it.
+3. Recommend by case:
+   - **Public advisory, fix exists as a PR:** merge it; nothing to raise.
+   - **Public advisory, no PR:** draft a tracking issue for the maintainer; the agent
+     never creates one (`issue_write` is granted for labels only).
+   - **A flaw in Kyverno's own code:** never a public issue, PR comment, or Slack
+     post. Draft the email to `kyverno-security@googlegroups.com` for the maintainer
+     to send.
+   - **A flaw in another project:** point the maintainer to that project's own
+     reporting channel.
+
+**Upstream changes** (a PR to `kyverno/kyverno`, same route as the readiness
+automation): a "Security-sensitive changes" section in root `AGENTS.md` (what counts,
+the `kind/security` label, where to report), and CodeRabbit `path_instructions` for
+`go.mod`/`go.sum` (flag new or bumped direct dependencies with a known advisory) and
+`.github/workflows/**` (`pull_request_target`, widened `permissions`, unpinned
+actions). One `AGENTS.md` edit reaches CodeRabbit and this assistant alike.
+
+**Done when:** asking "what security issues are open" returns a severity-ordered list
+with a verdict per item, and no unpatched Kyverno-code finding appears anywhere
+public.
+
+## 4. Semantic cross-PR analysis
+
+**Gap:** the sequencer's edges are mechanical by design. Two PRs touching different
+files can still depend on each other (a changed signature here, an unchanged caller
+there), and nothing detects it.
+
+**Verified tool landscape (Go, 2026-10):**
+
+| Tool | Gives | Needs | Verdict |
+|---|---|---|---|
+| `gopls mcp` (built into gopls ≥ 0.20, stdio) | `go_symbol_references`, `go_package_api`, `go_search`, `go_diagnostics`, `go_vulncheck`, `go_workspace`, `go_rename_symbol` | Go toolchain, a checkout with deps resolved (`go mod download`, no build) | **Primary.** First-party, no third-party wrapper. No call-hierarchy tool — references only |
+| `ast-grep` + `ast-grep-mcp` (active, MIT) | structural caller search | the binary; no Go setup | **Cheap baseline.** Name-based, no type resolution |
+| `go-apidiff` (active) | exported-API breaks between two commits | deps resolved | **Per-PR gate.** Catches what generated-file ordering can't |
+| `mcp-language-server` / `mcp-gopls` | gopls wrappers | same as gopls | Skip — `gopls mcp` replaces them (last push 2026-03 / 102 stars) |
+| `scip-go` + `synaptic-scip`/`codegraph` | richest index | full Go build, custom glue | Skip for now |
+| staticcheck, golangci-lint, difftastic, `go/callgraph`, GitHub's API | — | — | No cross-PR signal, or too heavy for kyverno's size |
+
+**The decision this item needs:** the profile has no file or terminal tools by design,
+and GitHub's `search_code` sees only the default branch, never a PR head. Analysis
+therefore has to run *inside a plugin tool* (like `kyverno-fetch` making its own HTTP
+calls), not through the model: a `kyverno-analyze` plugin keeps a bare clone, makes a
+detached worktree for `refs/pull/N/head`, runs the tools in subprocesses with
+timeouts, and returns JSON. That keeps laptop-level tool access disabled. It needs Go
+and `ast-grep` on the host, which `install.sh` checks as optional prerequisites.
+
+**Approach:**
+
+1. `kyverno-analyze` returns, per PR or pair: `go-apidiff` breaks (main → PR head),
+   `ast-grep` callers of each changed or removed symbol, and `go_vulncheck` reachability
+   for dependency bumps.
+2. `sequence_prs` accepts a `semantic_overlaps` annotation — a soft edge like
+   `package_overlaps`, never a hard order; the agent decides, as for every
+   within-tier judgment.
+3. Run on demand for a PR or a pair the structural report surfaced, not across every
+   open branch.
+
+**Done when:** a PR that removes an exported symbol another open PR calls is flagged
+on that pair, with both file paths cited.
+
+## 5. Local dashboard
+
+**Verified (Hermes source and docs):**
+
+- A dashboard plugin is `dashboard/manifest.json` plus a **plain JS IIFE** — no build
+  step — against `window.__HERMES_PLUGIN_SDK__`; an optional `plugin_api.py` adds
+  FastAPI routes under `/api/plugins/<name>/`.
+- The dashboard discovers plugins from `~/.hermes/plugins/<name>/dashboard/` (user
+  scope), **not** from a profile's own `plugins/` directory, so `hermes profile
+  install` does not ship one. `install.sh` has to copy it.
+- `plugin_api.py` runs inside the dashboard process with that process's privileges,
+  behind the dashboard's auth gate. Keep the dashboard on `127.0.0.1`; Hermes' own
+  docs warn against `--host 0.0.0.0` with untrusted plugins.
+
+**Approach:** a `kyverno-dashboard` plugin whose backend routes import `kyverno-fetch`
+and `sequence_prs` directly, so the data path is the one the skills use. Panels follow
+`docs/change_plan.md`'s dashboard spec (session header, queue in tier order,
+`workflow-approval-required`, per-PR brief, Discussions, session history), plus a
+Dependabot panel grouped by verdict. State lives in Mnemosyne or a local JSON file in
+the profile directory.
+
+**Done when:** `hermes dashboard` shows the live queue and Dependabot panel from a
+fresh `install.sh` run with no manual copy step.
+
+## 6. Gateway in Docker
+
+**Verified:** Hermes ships a `Dockerfile` and `docker-compose.yml` with a `gateway`
+service (`gateway run`) and a `dashboard` service, `~/.hermes` mounted at `/opt/data`,
+`network_mode: host`, s6-overlay as PID 1, dashboard bound to `127.0.0.1`. The compose
+file mounts no Docker socket.
+
+**The wrinkle:** our `github` and `slack` MCP servers are `docker run` commands.
+Inside the Hermes container they would need the host's Docker socket, which is
+root-equivalent on the host and contradicts this profile's safety model. Prefer
+removing the need: build an image `FROM` Hermes' that adds the two MCP servers as
+binaries and point `config.yaml`'s `command:` at them.
+
+**Prerequisite:** one instance serving several maintainers means shared credentials or
+a service account. That is the deployment-model decision in `to-do.md` (personal
+instance, shared read-only bot, shared full-capability bot) — decide it before
+building.
+
+**Done when:** `docker compose up` on a Linux host brings up the gateway with both MCP
+servers reachable and `hermes -p kyverno mcp test` green, no socket mounted.
+
+---
+
+## Tracked elsewhere
+
+`to-do.md` holds the remaining operational items: a write-capable PAT for a Kyverno
+member, the Slack app in the Kubernetes workspace and the maintainers channel, shared
+memory (mem0) across maintainers, and an issues-triage skill.
+
+## Already covered upstream
+
+`kyverno/kyverno#17864` added the `stale`/`no-stale` labels and a daily stale-author
+sweep, and moved Dependabot triage to a two-hourly sweep with a heading-based Copilot
+approval match.
