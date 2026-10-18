@@ -10,7 +10,7 @@ import (
 
 // Same deterministic "stale test fixture" pattern as version_test.go / version2_test.go, for a fourth
 // dependency, to get a clean PR uncontaminated by earlier test rounds' attempt-cap comment history.
-const expectedSubcommandsVersion = "v1.0.1"
+const expectedSubcommandsVersion = "v1.2.0"
 
 func TestSubcommandsVersionPin(t *testing.T) {
 	data, err := os.ReadFile("go.mod")
