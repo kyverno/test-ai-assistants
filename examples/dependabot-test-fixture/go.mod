@@ -6,6 +6,6 @@ require github.com/google/uuid v1.1.0
 
 require github.com/google/go-cmp v0.7.0
 
-require github.com/pkg/errors v0.8.0
+require github.com/pkg/errors v0.9.1
 
 require github.com/google/subcommands v1.0.1
