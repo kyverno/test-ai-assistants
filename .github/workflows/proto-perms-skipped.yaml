@@ -1,0 +1,13 @@
+# Prototype only. The caller grants contents: read; the shared workflow has a skipped job that wants issues: write.
+name: Proto perms skipped
+
+on:
+  workflow_dispatch:
+
+jobs:
+  call:
+    permissions:
+      contents: read
+    uses: kyverno/assistant/.github/workflows/proto-reusable-perms.yml@3772f1ae9d451ad92ed849c32cf94e67d7298571
+    with:
+      writer: 'false'

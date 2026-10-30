@@ -1,0 +1,14 @@
+# Prototype only. The caller grants issues: write, so the shared workflow's writer job may run.
+name: Proto perms granted
+
+on:
+  workflow_dispatch:
+
+jobs:
+  call:
+    permissions:
+      contents: read
+      issues: write
+    uses: kyverno/assistant/.github/workflows/proto-reusable-perms.yml@3772f1ae9d451ad92ed849c32cf94e67d7298571
+    with:
+      writer: 'true'

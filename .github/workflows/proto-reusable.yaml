@@ -1,18 +1,25 @@
-# Prototype only: a thin caller of the shared workflow in kyverno/assistant. Not for merging.
+# Prototype only: a thin caller of the shared workflow in kyverno/assistant. Not for keeping; removed after the test.
+# Every run is a dry run and only reads.
 name: Proto reusable caller
 
 on:
-  pull_request:
+  schedule:
+    - cron: '*/5 * * * *'
+    - cron: '1,11,21,31,41,51 * * * *'
+  pull_request_target:
   workflow_dispatch:
-
-permissions:
-  contents: read
+    inputs:
+      sleep:
+        description: Seconds the shared job stays open (to test concurrency queuing)
+        default: '0'
 
 jobs:
   call:
     permissions:
       contents: read
-    uses: kyverno/assistant/.github/workflows/proto-reusable-probe.yml@146cfce25922973246a14b5f74b77e8e4e9e5820
+      pull-requests: write
+      issues: write
+    uses: kyverno/assistant/.github/workflows/proto-reusable-probe.yml@3772f1ae9d451ad92ed849c32cf94e67d7298571
     with:
-      # `vars` is readable here, in the caller, so the dry-run choice can be made before the call.
-      dry-run: ${{ vars.PROTOTYPE_PROBE == 'hello' && 'true' || 'false' }}
+      dry-run: 'true'
+      sleep: ${{ inputs.sleep || '0' }}
