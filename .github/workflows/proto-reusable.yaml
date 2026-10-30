@@ -1,0 +1,18 @@
+# Prototype only: a thin caller of the shared workflow in kyverno/assistant. Not for merging.
+name: Proto reusable caller
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  call:
+    permissions:
+      contents: read
+    uses: kyverno/assistant/.github/workflows/proto-reusable-probe.yml@146cfce25922973246a14b5f74b77e8e4e9e5820
+    with:
+      # `vars` is readable here, in the caller, so the dry-run choice can be made before the call.
+      dry-run: ${{ vars.PROTOTYPE_PROBE == 'hello' && 'true' || 'false' }}
