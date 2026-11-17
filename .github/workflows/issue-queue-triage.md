@@ -39,8 +39,8 @@ safe-outputs:
     pull-requests: false
 
 timeout-minutes: 15
-source: suhaani-agarwal/ai-assistant/workflows/issue-queue-triage.md@292e53c
-source-sha: "292e53c"
+source: suhaani-agarwal/ai-assistant/workflows/issue-queue-triage.md@292e53cfa09abf9902aa4f47eff52d96b7c4a679
+source-sha: "292e53cfa09abf9902aa4f47eff52d96b7c4a679"
 ---
 
 # Issue queue triage
