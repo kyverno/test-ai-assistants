@@ -33,7 +33,7 @@ safe-outputs:
 timeout-minutes: 45
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@3de7c07b4c2737dcce41bd763a9ad0d1c64c3cf7
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@5e96e3fe5a3ec8f205e4835a24e3b5616ee7b7e7
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -53,7 +53,10 @@ imports:
         rules, write access granted by the operator. A report that needs the attacker to create or edit policies,
         PolicyExceptions or Kyverno's ConfigMap already assumes cluster-admin-equivalent power unless the report
         shows a namespaced user doing it. Policies with failurePolicy Ignore, excluded namespaces or excluded groups
-        behave as configured.
+        behave as configured. Kyverno v1.20 and later reject the legacy kyverno.io policy types (ClusterPolicy,
+        Policy). If the latest CLI refuses the report's policy for that reason, write the equivalent
+        policies.kyverno.io policy (ValidatingPolicy, MutatingPolicy or GeneratingPolicy), run that on the latest
+        CLI, and say in the evidence which policy you ran on which release.
 ---
 
 # Security advisory triage
