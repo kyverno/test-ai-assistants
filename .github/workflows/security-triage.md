@@ -17,6 +17,11 @@ description: |
 # hand. Its logs are public, so it must never point at a repository with real reports.
 on:
   workflow_dispatch:
+    inputs:
+      ghsa_id:
+        description: "Triage only this advisory, even if it has not changed since the last run. Empty for the usual pick."
+        required: false
+        type: string
 
 # copilot-requests lets the run use the built-in token for Copilot inference, billed to the organization, so no
 # personal access token is stored.
@@ -30,10 +35,11 @@ safe-outputs:
   # `gh aw compile` and commit to go live.
   staged: true
 
-timeout-minutes: 45
+# Each advisory reproduced in the lab takes about ten minutes: a fresh cluster and two installs.
+timeout-minutes: 90
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@3de7c07b4c2737dcce41bd763a9ad0d1c64c3cf7
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@db255b68131ddc2b0481efc175bd13bed24b524a
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -53,7 +59,16 @@ imports:
         rules, write access granted by the operator. A report that needs the attacker to create or edit policies,
         PolicyExceptions or Kyverno's ConfigMap already assumes cluster-admin-equivalent power unless the report
         shows a namespaced user doing it. Policies with failurePolicy Ignore, excluded namespaces or excluded groups
-        behave as configured.
+        behave as configured. Kyverno v1.20 and later reject the legacy kyverno.io policy types (ClusterPolicy,
+        Policy). If the latest CLI refuses the report's policy for that reason, write the equivalent
+        policies.kyverno.io policy (ValidatingPolicy, MutatingPolicy or GeneratingPolicy), run that on the latest
+        release (CLI or lab), and say in the evidence which policy you ran on which release.
+  # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@db255b68131ddc2b0481efc175bd13bed24b524a
+    with:
+      helm_repo: "https://kyverno.github.io/kyverno/"
+      chart_name: "kyverno"
+      release_namespace: "kyverno"
 ---
 
 # Security advisory triage
