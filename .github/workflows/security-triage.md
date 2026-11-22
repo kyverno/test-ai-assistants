@@ -39,7 +39,7 @@ safe-outputs:
 timeout-minutes: 90
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@db255b68131ddc2b0481efc175bd13bed24b524a
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@530889a19bc754b6a8940a052ab882187ede3c0b
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -64,7 +64,7 @@ imports:
         policies.kyverno.io policy (ValidatingPolicy, MutatingPolicy or GeneratingPolicy), run that on the latest
         release (CLI or lab), and say in the evidence which policy you ran on which release.
   # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@db255b68131ddc2b0481efc175bd13bed24b524a
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@530889a19bc754b6a8940a052ab882187ede3c0b
     with:
       helm_repo: "https://kyverno.github.io/kyverno/"
       chart_name: "kyverno"
