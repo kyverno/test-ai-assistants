@@ -27,10 +27,12 @@ on:
         required: false
         type: string
 
-# TEST ONLY: lets a manual run pick the model.
+# The model the agent runs on. Pinned rather than `auto`: in tests on a re-filed advisory, claude-sonnet-5.5 got
+# furthest, while claude-opus-5.5 and gpt-6-sol refused the report text before running anything.
+# TEST ONLY: a manual run can pick another model through the `model` input.
 engine:
   id: copilot
-  model: ${{ inputs.model || 'auto' }}
+  model: ${{ inputs.model || 'claude-sonnet-5.5' }}
 
 # copilot-requests lets the run use the built-in token for Copilot inference, billed to the organization, so no
 # personal access token is stored.
@@ -39,6 +41,11 @@ permissions:
   copilot-requests: write
 
 safe-outputs:
+  # Threat detection keeps its default `detection` model instead of inheriting the agent's.
+  threat-detection:
+    engine:
+      id: copilot
+      model: detection
   # Preview first: while this is on, each verdict is written to the run summary and nothing is posted on any
   # advisory. Compare a few weeks of previews with the security team's own triage, then delete this line, run
   # `gh aw compile` and commit to go live.
@@ -48,7 +55,7 @@ safe-outputs:
 timeout-minutes: 90
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@ab223f2a7b8cb60b6ab939e6deb91765313580fa
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@1ecdf8d44b1f2e01c88676a9680abf5f5707c05f
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -78,7 +85,7 @@ imports:
         release. The CEL libraries and migration documents in the context directory give the syntax: look a function
         up there before guessing its arguments.
   # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@ab223f2a7b8cb60b6ab939e6deb91765313580fa
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@1ecdf8d44b1f2e01c88676a9680abf5f5707c05f
     with:
       helm_repo: "https://kyverno.github.io/kyverno/"
       chart_name: "kyverno"
