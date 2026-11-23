@@ -150,6 +150,7 @@ safe-outputs:
           type: string
         classification:
           description: >-
+            About result_release only, even if a newer one no longer shows it (that goes in fixed_in).
             reproduced: the reported impact reproduced. needs-non-default-config: it reproduces only with a
             configuration, permission or policy the project documents as the operator's responsibility.
             not-reproduced: you followed the report and it did not reproduce. needs-more-info: the report lacks what
@@ -161,18 +162,34 @@ safe-outputs:
           description: "true only if you ran it and observed the reported impact."
           required: true
           type: boolean
+        result_release:
+          description: >-
+            The release the classification is about, e.g. v1.16.1: the reported release, or the closest release
+            you could run if neither the CLI nor the lab could run the reported one. Empty if you ran nothing.
+          required: false
+          type: string
+          max-length: 40
+        closest_release:
+          description: "true if the reported release could not be run and result_release is the closest you could run."
+          required: false
+          type: boolean
         tested_versions:
           description: "Comma-separated CLI versions you ran, e.g. v1.20.0, v1.19.2. Empty if none."
           required: false
           type: string
           max-length: 200
-        suggested_severity:
-          description: "Your suggested severity from your CVSS score."
-          required: true
-          type: choice
-          options: ["critical", "high", "medium", "low", "none"]
+        fixed_in:
+          description: >-
+            The first newer release you tested on which the reported impact no longer appeared, e.g. v1.16.4. Empty
+            if every release you tested still showed it, or you could not test a newer one.
+          required: false
+          type: string
+          max-length: 40
         suggested_cvss_vector:
-          description: "Your CVSS 3.1 vector, e.g. CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N. Empty if not a vulnerability."
+          description: >-
+            Your CVSS 3.1 vector for what you observed on result_release, e.g.
+            CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N. The severity is computed from it. Empty if not a
+            vulnerability.
           required: false
           type: string
           max-length: 60
@@ -187,7 +204,7 @@ safe-outputs:
           type: string
           max-length: 5000
         assessment:
-          description: "Why you chose this classification and severity, citing the report and the context documents."
+          description: "Why you chose this classification and CVSS vector, citing the report and the context documents."
           required: true
           type: string
           max-length: 3000
@@ -248,8 +265,9 @@ safe-outputs:
                 "needs-more-info": "More information needed to reproduce",
                 "possible-duplicate": "Possibly covered by a published advisory",
             }
-            SEVERITIES = ["critical", "high", "medium", "low", "none"]
             CVSS = re.compile(r"^CVSS:3\.1/AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH]$")
+            # The same releases the lab installs, release candidates included.
+            VERSION = re.compile(r"^v?\d+\.\d+(\.\d+(-(alpha|beta|rc)\.\d+)?)?$")
             GHSA = re.compile(r"^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$")
 
             def clean(value, cap):
@@ -261,8 +279,42 @@ safe-outputs:
                 return s.strip()[:cap]
 
             def cvss_or_empty(v):
-                v = str(v or "").strip()
-                return v if CVSS.match(v) else ""
+                """A valid CVSS 3.1 vector in canonical metric order, whatever order it came in; empty otherwise."""
+                parts = str(v or "").strip().split("/")
+                if not parts or parts[0] != "CVSS:3.1" or not all(p.count(":") == 1 for p in parts[1:]):
+                    return ""
+                metrics = dict(p.split(":") for p in parts[1:])
+                if len(metrics) != len(parts) - 1:
+                    return ""
+                order = ("AV", "AC", "PR", "UI", "S", "C", "I", "A")
+                canonical = "CVSS:3.1/" + "/".join(f"{k}:{metrics.get(k, '')}" for k in order)
+                return canonical if set(metrics) == set(order) and CVSS.match(canonical) else ""
+
+            def cvss_score(vector):
+                """CVSS 3.1 base score, as in the specification (section 7.1 and the Roundup function in Appendix A)."""
+                m = dict(p.split(":") for p in vector.split("/")[1:])
+                changed = m["S"] == "C"
+                av = {"N": 0.85, "A": 0.62, "L": 0.55, "P": 0.2}[m["AV"]]
+                ac = {"L": 0.77, "H": 0.44}[m["AC"]]
+                pr = {"N": 0.85, "L": 0.68 if changed else 0.62, "H": 0.5 if changed else 0.27}[m["PR"]]
+                ui = {"N": 0.85, "R": 0.62}[m["UI"]]
+                cia = {"H": 0.56, "L": 0.22, "N": 0.0}
+                iss = 1 - (1 - cia[m["C"]]) * (1 - cia[m["I"]]) * (1 - cia[m["A"]])
+                impact = 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02) ** 15 if changed else 6.42 * iss
+                if impact <= 0:
+                    return 0.0
+                base = min((1.08 if changed else 1) * (impact + 8.22 * av * ac * pr * ui), 10)
+                n = round(base * 100000)
+                return n / 100000 if n % 10000 == 0 else (n // 10000 + 1) / 10
+
+            def severity(score):
+                if score >= 9.0:
+                    return "critical"
+                if score >= 7.0:
+                    return "high"
+                if score >= 4.0:
+                    return "medium"
+                return "low" if score > 0 else "none"
 
             def related(v):
                 return [g for g in re.split(r"[,\s]+", str(v or "")) if GHSA.match(g)][:5]
@@ -272,16 +324,31 @@ safe-outputs:
                 reported = entry.get("severity") or "not set"
                 reported_vec = entry.get("cvss_vector") or ""
                 vec = cvss_or_empty(item.get("suggested_cvss_vector"))
-                sev = item["suggested_severity"]
-                agrees = (reported.lower() == sev) if entry.get("severity") else None
+                # The severity comes from the vector, never from the model's own word for it.
+                if vec:
+                    score = cvss_score(vec)
+                    sev, suggested = severity(score), f"`{severity(score)}` ({score}, `{vec}`)"
+                else:
+                    sev, suggested = None, "not scored"
+                agrees = (reported.lower() == sev) if entry.get("severity") and sev else None
+                fixed = str(item.get("fixed_in") or "").strip()
+                # The heading names the release the result is about, and never claims the reported release when the
+                # agent could only run a nearby one.
+                release = str(item.get("result_release") or "").strip()
+                release = release if VERSION.match(release) else ""
+                if as_bool(item.get("closest_release")):
+                    where = (f" on {release}" if release else "") + " (the reported release could not be run)"
+                else:
+                    where = f" on {release} (the reported release)" if release else ""
                 lines = [
                     "### Automated first-pass triage",
                     "",
-                    f"**Result:** {CLASSIFICATIONS[cls]}  ",
+                    f"**Result{where}:** {CLASSIFICATIONS[cls]}  ",
                     f"**Reproduced:** {'yes' if item['reproduced'] else 'no'}"
-                    + (f" · **Versions tried:** {clean(item.get('tested_versions'), 200)}" if item.get("tested_versions") else ""),
+                    + (f" · **Versions tried:** {clean(item.get('tested_versions'), 200)}" if item.get("tested_versions") else "")
+                    + (f" · **Not seen in:** {fixed}" if VERSION.match(fixed) else "") + "  ",
                     f"**Severity:** reported `{reported}`" + (f" (`{reported_vec}`)" if reported_vec else "")
-                    + f" · suggested `{sev}`" + (f" (`{vec}`)" if vec else "")
+                    + f" · suggested {suggested}"
                     + ("" if agrees is None else (" · agrees with the report" if agrees else " · differs from the report")),
                     "",
                     "#### What was tried",
@@ -311,8 +378,6 @@ safe-outputs:
                     return f"{g!r} is not one of this run's advisories"
                 if item.get("classification") not in CLASSIFICATIONS:
                     return "unknown classification"
-                if item.get("suggested_severity") not in SEVERITIES:
-                    return "unknown severity"
                 return None
 
             def as_bool(v):
@@ -719,15 +784,18 @@ ${{ needs.collect.outputs.json }}
    release and the latest. Use the report's own policies and resources where it gives them, adapted only as far as
    needed to run. Keep notes of each command, its exit code and the lines of output that matter. Work in this order:
    a. Pick the report's main claim: the one impact the rest depends on.
-   b. Reproduce that claim on the reported release.
+   b. Reproduce that claim on the reported release, and put it in `result_release`. If neither the CLI nor the lab
+      can run that exact release, use the closest release you can run instead: put that one in `result_release`,
+      set `closest_release` to true, and say in the assessment why the reported one could not be run.
    c. Check the same claim on a newer release before anything else: the newest patch of the same minor release if
       you can install it (the report's policy runs there unchanged), then the latest release.
    d. Only then look at the report's further claims (for example that the same flaw also allows writes or
       privilege escalation). Build one only if it would change the severity; otherwise reason from what you have
       already shown, and say in the verdict which claims you ran and which you reasoned about.
 4. Compare with `published` for a possible duplicate.
-5. Score it with CVSS 3.1 from what you observed, not from the report's wording. Severity follows the score:
-   9.0–10.0 critical, 7.0–8.9 high, 4.0–6.9 medium, 0.1–3.9 low, and `none` when it is not a vulnerability.
+5. Write a CVSS 3.1 vector for what you observed on `result_release`, not from the report's wording. The
+   severity is computed from your vector, so choose each metric with care and explain the choices in the assessment.
+   Leave it empty when it is not a vulnerability.
 6. Record what you have with `post_advisory_verdict` as soon as you have a result on the first release you test,
    then call it again with the full verdict once you have tested the other. The last call for an advisory replaces
    the earlier ones, so a later failure cannot lose a result you already have. Each call stands on its own: fill
@@ -750,10 +818,15 @@ You are checking whether a claim holds, the way a test does. Write it like a tes
 
 ## Choosing the classification
 
+The classification is about `result_release`: the reported release, or the closest one when it could not be run. A
+report that reproduces there and is gone on a newer release is still `reproduced`: put the first newer release where it
+no longer appeared in `fixed_in`.
+
 - `reproduced`: you ran it and saw the reported impact.
 - `needs-non-default-config`: it reproduces, but only with a setting, permission or policy that the context documents
   make the operator's responsibility. Name the setting and the document section.
-- `not-reproduced`: you followed the report on both releases and the impact did not appear. Say what you saw instead.
+- `not-reproduced`: you followed the report on `result_release` and the impact did not appear. Say what you saw
+  instead.
 - `needs-more-info`: the report lacks what is needed to try (no policy, no resource, no version, no steps). Ask for it.
 - `possible-duplicate`: it matches a published advisory. Name it in `related_advisories`.
 
@@ -769,4 +842,4 @@ ${{ github.aw.import-inputs.extra_rules }}
 Record each advisory with `post_advisory_verdict` as described above, every field filled from what you actually did. Keep evidence to
 excerpts. Do not mention people, do not promise fixes or timelines, and do not repeat secrets, tokens or personal
 data from a report. If there is nothing to triage, call `noop`. End your run with one line per advisory: its GHSA ID,
-the classification and the suggested severity.
+the classification and the CVSS vector.

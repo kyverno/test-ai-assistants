@@ -27,12 +27,14 @@ on:
         required: false
         type: string
 
-# The model the agent runs on. Pinned rather than `auto`: in tests on a re-filed advisory, claude-sonnet-5.5 got
-# furthest, while claude-opus-5.5 and gpt-6-sol refused the report text before running anything.
+# The model the agent runs on. Pinned rather than `auto`: newer models carry always-on safety classifiers that also
+# decline benign security work (https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback). On a
+# re-filed advisory, claude-sonnet-5.5 was refused in 3 of 5 runs, claude-opus-5.5 and gpt-6-sol before running
+# anything, while claude-sonnet-5 finished 2 of 2.
 # TEST ONLY: a manual run can pick another model through the `model` input.
 engine:
   id: copilot
-  model: ${{ inputs.model || 'claude-sonnet-5.5' }}
+  model: ${{ inputs.model || 'claude-sonnet-5' }}
 
 # copilot-requests lets the run use the built-in token for Copilot inference, billed to the organization, so no
 # personal access token is stored.
@@ -55,7 +57,7 @@ safe-outputs:
 timeout-minutes: 90
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@91220b91345ba13728f067c3b109c4c561de34f2
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@c9336cf28928193370f78c0aac60de3957217457
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -85,7 +87,7 @@ imports:
         release. The CEL libraries and migration documents in the context directory give the syntax: look a function
         up there before guessing its arguments.
   # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@91220b91345ba13728f067c3b109c4c561de34f2
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@c9336cf28928193370f78c0aac60de3957217457
     with:
       helm_repo: "https://kyverno.github.io/kyverno/"
       chart_name: "kyverno"
