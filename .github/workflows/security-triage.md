@@ -48,6 +48,8 @@ safe-outputs:
     engine:
       id: copilot
       model: detection
+    # It uses about one credit per run; the default allows 400.
+    max-ai-credits: 10
   # Preview first: while this is on, each verdict is written to the run summary and nothing is posted on any
   # advisory. Compare a few weeks of previews with the security team's own triage, then delete this line, run
   # `gh aw compile` and commit to go live.
@@ -56,14 +58,14 @@ safe-outputs:
 # Each advisory reproduced in the lab takes about ten minutes: a fresh cluster and two installs.
 timeout-minutes: 90
 
-# The most AI credits one run may spend. With one advisory per run (limit below) this is a cap per advisory; a
-# normal triage stays well under it. A run that reaches it stops: the verdict recorded so far still posts, and an
+# The most AI credits the agent may spend in one run. With one advisory per run (limit below) this is a cap per
+# advisory; a normal triage stays well under it. Threat detection has its own cap below. A run that reaches it stops: the verdict recorded so far still posts, and an
 # advisory with none is marked unfinished and tried again next run. Raise it together with limit. A plain number:
 # gh-aw ignores an expression here.
 max-ai-credits: 200
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@156fccd6b86f0bc69003720ab798208e7c4dd9c9
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@8884645ffefc9f9eea654a1721d057ad9a0fdb1b
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -94,7 +96,7 @@ imports:
         CEL libraries and migration documents in the context directory give the syntax: look a function up there
         before guessing its arguments.
   # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@156fccd6b86f0bc69003720ab798208e7c4dd9c9
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@8884645ffefc9f9eea654a1721d057ad9a0fdb1b
     with:
       helm_repo: "https://kyverno.github.io/kyverno/"
       chart_name: "kyverno"
