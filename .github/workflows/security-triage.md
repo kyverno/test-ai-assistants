@@ -56,15 +56,22 @@ safe-outputs:
 # Each advisory reproduced in the lab takes about ten minutes: a fresh cluster and two installs.
 timeout-minutes: 90
 
+# The most AI credits one run may spend. With one advisory per run (limit below) this is a cap per advisory; a
+# normal triage stays well under it. A run that reaches it stops: the verdict recorded so far still posts, and an
+# advisory with none is marked unfinished and tried again next run. Raise it together with limit. A plain number:
+# gh-aw ignores an expression here.
+max-ai-credits: 200
+
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@7d2f6aec17aaf23539e9b947c8c8e8573781b376
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@156fccd6b86f0bc69003720ab798208e7c4dd9c9
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
       # Mentioned on the first verdict for an advisory and when the result changes. Empty for none.
       team_mentions: ""
-      # The most advisories one run triages.
-      limit: 5
+      # The most advisories one run triages. One per run keeps max-ai-credits a cap per advisory; at every 6 hours that
+      # is up to four a day.
+      limit: 1
       # The CLI the agent reproduces with (these are the defaults), and the documents it reads.
       cli_repo: "kyverno/kyverno"
       cli_asset: "kyverno-cli_{tag}_linux_x86_64.tar.gz"
@@ -87,7 +94,7 @@ imports:
         CEL libraries and migration documents in the context directory give the syntax: look a function up there
         before guessing its arguments.
   # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@7d2f6aec17aaf23539e9b947c8c8e8573781b376
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@156fccd6b86f0bc69003720ab798208e7c4dd9c9
     with:
       helm_repo: "https://kyverno.github.io/kyverno/"
       chart_name: "kyverno"
