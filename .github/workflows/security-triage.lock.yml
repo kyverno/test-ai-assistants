@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"cb74c9ac1fbdaf7eebed2bec1b7230d34be02af0ed8b746dd74e9e54ee6043a2","body_hash":"90269df0409ebc0b869b179e251b0b202e029b99d558fa4a0824607cbb7c690c","compiler_version":"v1.2.2","strict":true,"agent_id":"copilot","agent_model":"${{ inputs.model || 'claude-sonnet-5' }}","detection_agent_id":"copilot","detection_agent_model":"detection","engine_versions":{"copilot":"1.0.103"}}
-# gh-aw-manifest: {"version":1,"secrets":["GH_AW_DEFAULT_OTLP_ENDPOINT","GH_AW_DEFAULT_OTLP_HEADERS","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN","SECURITY_TRIAGE_APP_CLIENT_ID","SECURITY_TRIAGE_APP_PRIVATE_KEY"],"actions":[{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/create-github-app-token","sha":"bcd2ba49218906704ab6c1aa796996da409d3eb1","version":"v3.2.0"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"9000827ccba6bdab643e8b6fd33ac0654aef8333","version":"v8.0.2"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"949feb2413d6458794dcd2491c4babbbce0c15c1","version":"v7.1.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"cf430e030ddbb5b0abf93d22962f4752f3646cd9","version":"v7.0.2"},{"repo":"github/gh-aw-actions/setup","sha":"53d0749e19424a918acd82b4d140264ce48f2f14","version":"v1.2.2"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.29.11","digest":"sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.29.11@sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.11","digest":"sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.11@sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.29.11","digest":"sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.29.11@sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.5.6","digest":"sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.5.6@sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc","pinned_image":"ghcr.io/github/gh-aw-node@sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc"},{"image":"ghcr.io/github/github-mcp-server:v2.1.0","digest":"sha256:f6056fc10bfffcc8c81a6417a2e9ca12808647e8dd6049642a4feaadee0e0f8a","pinned_image":"ghcr.io/github/github-mcp-server:v2.1.0@sha256:f6056fc10bfffcc8c81a6417a2e9ca12808647e8dd6049642a4feaadee0e0f8a"}],"mcp_servers":[{"name":"github","tools":["get_commit","get_file_contents","get_latest_release","get_me","get_pull_request","get_pull_request_comments","get_pull_request_diff","get_pull_request_files","get_pull_request_review_comments","get_pull_request_reviews","get_pull_request_status","get_release_by_tag","get_tag","issue_read","list_branches","list_commits","list_issue_types","list_issues","list_pull_requests","list_releases","list_starred_repositories","list_tags","pull_request_read","search_code","search_issues","search_pull_requests","search_repositories"]},{"name":"mcpscripts","tools":["lab-install","lab-kubectl","lab-reset","lab-tenant"]},{"name":"safeoutputs","tools":["noop","post_advisory_verdict","report_incomplete","report_missing_data","report_missing_tool"]}],"threat_detection":{"mode":"enabled"},"admission":false,"agent_metadata":{}}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"893747e3dde47942551c06f61683001c43163a77bc233cbe64d4897c1012d0b8","body_hash":"90269df0409ebc0b869b179e251b0b202e029b99d558fa4a0824607cbb7c690c","compiler_version":"v1.2.2","strict":true,"agent_id":"copilot","agent_model":"${{ inputs.model || 'claude-sonnet-5' }}","detection_agent_id":"copilot","detection_agent_model":"detection","engine_versions":{"copilot":"1.0.103"}}
+# gh-aw-manifest: {"version":1,"secrets":["GH_AW_DEFAULT_OTLP_ENDPOINT","GH_AW_DEFAULT_OTLP_HEADERS","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN","SECURITY_TRIAGE_APP_CLIENT_ID","SECURITY_TRIAGE_APP_PRIVATE_KEY"],"actions":[{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/create-github-app-token","sha":"bcd2ba49218906704ab6c1aa796996da409d3eb1","version":"v3.2.0"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"9000827ccba6bdab643e8b6fd33ac0654aef8333","version":"v8.0.2"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"949feb2413d6458794dcd2491c4babbbce0c15c1","version":"v7.1.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"cf430e030ddbb5b0abf93d22962f4752f3646cd9","version":"v7.0.2"},{"repo":"github/gh-aw-actions/setup","sha":"53d0749e19424a918acd82b4d140264ce48f2f14","version":"v1.2.2"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.29.11","digest":"sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.29.11@sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.11","digest":"sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.11@sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.29.11","digest":"sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.29.11@sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.5.6","digest":"sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.5.6@sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc","pinned_image":"ghcr.io/github/gh-aw-node@sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc"}],"mcp_servers":[{"name":"mcpscripts","tools":["lab-install","lab-kubectl","lab-reset","lab-tenant"]},{"name":"safeoutputs","tools":["noop","post_advisory_verdict","report_incomplete","report_missing_data","report_missing_tool"]}],"threat_detection":{"mode":"enabled"},"admission":false,"agent_metadata":{}}
 # This file was automatically generated by gh-aw (v1.2.2). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -29,8 +29,8 @@
 #
 # Resolved workflow manifest:
 #   Imports:
-#     - suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@7d2f6aec17aaf23539e9b947c8c8e8573781b376
-#     - suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@7d2f6aec17aaf23539e9b947c8c8e8573781b376
+#     - suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@e7da6cef2775d09795cf3d2bba3810fe81163229
+#     - suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@e7da6cef2775d09795cf3d2bba3810fe81163229
 #
 # Secrets used:
 #   - GH_AW_DEFAULT_OTLP_ENDPOINT
@@ -58,7 +58,6 @@
 #   - ghcr.io/github/gh-aw-firewall/squid:0.29.11@sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847
 #   - ghcr.io/github/gh-aw-mcpg:v0.5.6@sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311
 #   - ghcr.io/github/gh-aw-node@sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc
-#   - ghcr.io/github/github-mcp-server:v2.1.0@sha256:f6056fc10bfffcc8c81a6417a2e9ca12808647e8dd6049642a4feaadee0e0f8a
 
 name: "Security advisory triage"
 on:
@@ -103,7 +102,6 @@ env:
 jobs:
   activation:
     name: activation
-    needs: collect
     runs-on: ubuntu-slim
     # Permissions for the activation job (workflow permissions default to none).
     permissions:
@@ -170,8 +168,8 @@ jobs:
           GH_AW_INFO_FIREWALL_TYPE: "squid"
           GH_AW_INFO_AGENT_RUNTIME: ""
           GH_AW_INFO_ENGINE_HARNESS: "copilot-cli"
-          GH_AW_INFO_MODEL_CONFIG: '{"routing":{"enabled":false},"models":{"allowed":[],"blocked":[]},"max_ai_credits_source":"default"}'
-          GH_AW_INFO_MAX_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_MAX_AI_CREDITS || '1000' }}
+          GH_AW_INFO_MODEL_CONFIG: '{"routing":{"enabled":false},"models":{"allowed":[],"blocked":[]},"max_ai_credits_source":"frontmatter"}'
+          GH_AW_INFO_MAX_AI_CREDITS: "200"
           GH_AW_COMPILED_STRICT: "true"
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -211,7 +209,7 @@ jobs:
           GH_AW_HAS_LABEL_COMMAND: "false"
           GH_AW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_AW_MAX_DAILY_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_MAX_DAILY_AI_CREDITS || '5000' }}
-          GH_AW_MAX_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_MAX_AI_CREDITS || '1000' }}
+          GH_AW_MAX_AI_CREDITS: "200"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -293,7 +291,7 @@ jobs:
         with:
           github-token: no-authentication
           script: |
-            const promptEnvironment = new Set(["GH_AW_ACTIONS_DIR","GH_AW_EXPR_76DF9333","GH_AW_EXPR_77C1A4D2","GH_AW_EXPR_7C248226","GH_AW_EXPR_C19C384F","GH_AW_GITHUB_ACTOR","GH_AW_GITHUB_REPOSITORY","GH_AW_GITHUB_RUN_ID","GH_AW_GITHUB_WORKSPACE","GH_AW_NEEDS_COLLECT_OUTPUTS_JSON","GH_AW_PROMPT","GH_AW_PROMPT_CONFIG","GH_AW_PROMPT_CONTENT_0000","GH_AW_PROMPT_CONTENT_0001","GH_AW_PROMPT_CONTENT_0002","GH_AW_PROMPT_CONTENT_0003","GH_AW_PROMPT_CONTENT_0004","GH_AW_PROMPT_CONTENT_0005","GH_AW_PROMPT_CONTENT_0006","GH_AW_SAFE_OUTPUTS","GITHUB_ACTION","GITHUB_ACTOR","GITHUB_API_URL","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","GITHUB_GRAPHQL_URL","GITHUB_JOB","GITHUB_OUTPUT","GITHUB_REF","GITHUB_REPOSITORY","GITHUB_RUN_ATTEMPT","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_SERVER_URL","GITHUB_SHA","GITHUB_STEP_SUMMARY","GITHUB_WORKFLOW","GITHUB_WORKSPACE","PATH","RUNNER_ARCH","RUNNER_OS","RUNNER_TEMP"]);
+            const promptEnvironment = new Set(["GH_AW_ACTIONS_DIR","GH_AW_PROMPT","GH_AW_PROMPT_CONFIG","GH_AW_PROMPT_CONTENT_0000","GH_AW_PROMPT_CONTENT_0001","GH_AW_PROMPT_CONTENT_0002","GH_AW_PROMPT_CONTENT_0003","GH_AW_PROMPT_CONTENT_0004","GH_AW_PROMPT_CONTENT_0005","GH_AW_SAFE_OUTPUTS","GITHUB_ACTION","GITHUB_ACTOR","GITHUB_API_URL","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","GITHUB_GRAPHQL_URL","GITHUB_JOB","GITHUB_OUTPUT","GITHUB_REF","GITHUB_REPOSITORY","GITHUB_RUN_ATTEMPT","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_SERVER_URL","GITHUB_SHA","GITHUB_STEP_SUMMARY","GITHUB_WORKFLOW","GITHUB_WORKSPACE","PATH","RUNNER_ARCH","RUNNER_OS","RUNNER_TEMP"]);
             for (const name of Object.keys(process.env)) {
               if (!promptEnvironment.has(name)) delete process.env[name];
             }
@@ -303,21 +301,12 @@ jobs:
             await main(core);
         env:
           GH_AW_ACTIONS_DIR: ${{ runner.temp }}/gh-aw/actions
-          GH_AW_EXPR_76DF9333: ${{ github.event.pull_request.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'pull_request' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_77C1A4D2: ${{ github.event.comment.id || fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').comment_id }}
-          GH_AW_EXPR_7C248226: ${{ github.event.issue.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'issue' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_C19C384F: ${{ github.event.discussion.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'discussion' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
-          GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
-          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
-          GH_AW_NEEDS_COLLECT_OUTPUTS_JSON: ${{ needs.collect.outputs.json }}
           GH_AW_OTLP_ENDPOINTS: ""
           GH_AW_OTLP_IF_MISSING: ""
           GH_AW_OTLP_LOGS_ENABLED: ""
           GH_AW_OTLP_LOGS_MAX_BYTES: ""
           GH_AW_PROMPT: ${{ runner.temp }}/gh-aw/aw-prompts/prompt.txt
-          GH_AW_PROMPT_CONFIG: "{\"items\":[{\"content_env\":\"GH_AW_PROMPT_CONTENT_0000\"},{\"file\":\"xpia.md\"},{\"file\":\"temp_folder_prompt.md\"},{\"file\":\"markdown.md\"},{\"file\":\"safe_outputs_mcp_transport_prompt.md\"},{\"file\":\"safe_outputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0001\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0002\"},{\"file\":\"mcp_cli_tools_with_safeoutputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0003\"},{\"file\":\"github_mcp_tools_with_safeoutputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0004\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0005\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0006\"},{\"author_file\":\".github/workflows/security-triage.md\"}],\"system_item_count\":12,\"author_expressions\":{\"needs.collect.outputs.json\":\"GH_AW_NEEDS_COLLECT_OUTPUTS_JSON\"}}"
+          GH_AW_PROMPT_CONFIG: "{\"items\":[{\"content_env\":\"GH_AW_PROMPT_CONTENT_0000\"},{\"file\":\"xpia.md\"},{\"file\":\"temp_folder_prompt.md\"},{\"file\":\"markdown.md\"},{\"file\":\"safe_outputs_mcp_transport_prompt.md\"},{\"file\":\"safe_outputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0001\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0002\"},{\"file\":\"mcp_cli_tools_with_safeoutputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0003\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0004\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0005\"},{\"author_file\":\".github/workflows/security-triage.md\"}],\"system_item_count\":10}"
           GH_AW_PROMPT_CONTENT_0000: |
             <system>
           GH_AW_PROMPT_CONTENT_0001: |
@@ -325,37 +314,9 @@ jobs:
             Tools: report_missing_tool, report_missing_data, noop(max:2), post_advisory_verdict
           GH_AW_PROMPT_CONTENT_0002: |
             </safe-output-tools>
-          GH_AW_PROMPT_CONTENT_0003: |+
-            <github-context>
-            {{#if __GH_AW_GITHUB_ACTOR__ }}
-            - **actor**: __GH_AW_GITHUB_ACTOR__
-            {{/if}}
-            {{#if __GH_AW_GITHUB_REPOSITORY__ }}
-            - **repository**: __GH_AW_GITHUB_REPOSITORY__
-            {{/if}}
-            {{#if __GH_AW_GITHUB_WORKSPACE__ }}
-            - **workspace**: __GH_AW_GITHUB_WORKSPACE__
-            {{/if}}
-            {{#if __GH_AW_EXPR_7C248226__ }}
-            - **issue-number**: #__GH_AW_EXPR_7C248226__
-            {{/if}}
-            {{#if __GH_AW_EXPR_C19C384F__ }}
-            - **discussion-number**: #__GH_AW_EXPR_C19C384F__
-            {{/if}}
-            {{#if __GH_AW_EXPR_76DF9333__ }}
-            - **pull-request-number**: #__GH_AW_EXPR_76DF9333__
-            {{/if}}
-            {{#if __GH_AW_EXPR_77C1A4D2__ }}
-            - **comment-id**: __GH_AW_EXPR_77C1A4D2__
-            {{/if}}
-            {{#if __GH_AW_GITHUB_RUN_ID__ }}
-            - **workflow-run-id**: __GH_AW_GITHUB_RUN_ID__
-            {{/if}}
-            </github-context>
-
-          GH_AW_PROMPT_CONTENT_0004: |
+          GH_AW_PROMPT_CONTENT_0003: |
             </system>
-          GH_AW_PROMPT_CONTENT_0005: |
+          GH_AW_PROMPT_CONTENT_0004: |
             # Security advisory triage
 
             You give a first-pass triage of unpublished security reports for the project's security team. You do not decide
@@ -371,19 +332,19 @@ jobs:
 
             ## The advisories
 
-            A step that ran before you chose the advisories for this run. Triage exactly these, no others. `advisories` holds the
-            reports; `published` holds the project's published advisories, for spotting duplicates. `previous_bot_result` is
-            your earlier result if the report changed since you last looked; reporter comments may answer your questions.
-
-            <advisories>
-            __GH_AW_NEEDS_COLLECT_OUTPUTS_JSON__
-            </advisories>
+            A step that ran before you chose the advisories for this run and wrote them to
+            `/tmp/gh-aw/security-triage/input/advisories.json`. Read that file first. Triage exactly these, no others.
+            `advisories` holds the reports; `published` holds the project's published advisories, for spotting duplicates.
+            `reported_release` is the release to test first, worked out from the advisory's version range.
+            `previous_bot_result` is your earlier result if the report changed since you last looked; reporter comments may
+            answer your questions.
 
             ## What you have
 
-            - The project's CLI, two releases: `kyverno-latest` and
-              `kyverno-previous`. `/tmp/gh-aw/security-triage/versions.json` says which tag
-              each one is. Run `--help` on a subcommand before relying on its flags.
+            - The project's CLI: `kyverno-latest`, `kyverno-previous`,
+              and `kyverno-reported` for the advisory's `reported_release` when it could be
+              installed. `/tmp/gh-aw/security-triage/versions.json` says which tag each one is. Run `--help` on a subcommand
+              before relying on its flags.
             - Context documents in `/tmp/gh-aw/security-triage/context/`: the project's threat model and security guidance,
               and any reference documents the project adds. Read the threat model once, before the first advisory: it says what
               the project treats as the operator's responsibility. Search the reference documents with `grep` when you need them.
@@ -411,11 +372,14 @@ jobs:
                where it gives them, unchanged wherever they run, adapted only as far as needed. Keep notes of each command, its
                exit code and the lines of output that matter. This is the order of releases to test; nothing else adds one:
                a. Pick the report's main claim: the one impact the rest depends on.
-               b. Reproduce it on the reported release, and put that release in `result_release`. Only if you tried and neither
-                  the CLI nor the lab could run it, use the closest release you can run instead: put that one in `result_release`, set
-                  `closest_release` to true, and say in the assessment why the reported one could not be run. If the impact does
-                  not appear there, test the main claim once on the latest release, in case the report names the wrong release,
-                  and stop.
+               b. Reproduce it on the reported release, and put that release in `result_release`. The reported release is the
+                  advisory's `reported_release`: install exactly that one first, whatever else the report mentions. Only if it is
+                  empty, use the release the report says it tested, or the latest if it names none. Only if you tried and neither
+                  the CLI nor the lab could run it, use the closest release instead: put that one in `result_release`, set
+                  `closest_release` to true, and say in the assessment why the reported one could not be run. Use the report's
+                  own files. If they run and the impact does not appear, make at most two changes the report's text supports (a
+                  missing namespace, permission or setting), then record what you saw instead of building variants of your own,
+                  test the main claim once on the latest release in case the report names the wrong release, and stop.
                c. While that release is still in use, test a further claim of the report (for example that the same flaw also
                   allows writes) only if it would change the severity; otherwise reason from what you have shown. Say in the
                   verdict which claims you ran and which you reasoned about.
@@ -465,6 +429,10 @@ jobs:
               instead.
             - `needs-more-info`: the report lacks what is needed to try (no policy, no resource, no version, no steps). Ask for it.
             - `possible-duplicate`: it matches a published advisory. Name it in `related_advisories`.
+            - `not-tested`: the report is about something the CLI and the lab cannot run, such as the project's CI workflows,
+              another product, its website, TLS settings of a deployment, or image verification that needs signing keys and a
+              registry. Say exactly what was missing, call `report_missing_tool` naming it, and reason from the code paths and
+              documents the report names. Never use it for a report you could have run.
 
             When unsure between two, choose the one that asks a person to look harder: `needs-more-info` over `not-reproduced`,
             `reproduced` over `needs-non-default-config`. Never call a report invalid or suggest closing it.
@@ -479,7 +447,7 @@ jobs:
             excerpts. Do not mention people, do not promise fixes or timelines, and do not repeat secrets, tokens or personal
             data from a report. If there is nothing to triage, call `noop`. End your run with one line per advisory: its GHSA ID,
             the classification and the CVSS vector.
-          GH_AW_PROMPT_CONTENT_0006: |
+          GH_AW_PROMPT_CONTENT_0005: |
             ## The lab
 
             You also have a throwaway Kubernetes cluster for this run, built only for reproducing reports. Nothing in it is
@@ -510,13 +478,20 @@ jobs:
             2. Follow the report's steps as that user and record what you observe: denials, the canary showing up where it
                should not, a resource changed, a controller restarting (`get pods -n <namespace>` restart counts and
                `logs --previous`).
+               - Generate, mutate-existing and cleanup rules act in the background, seconds after the request. Before deciding
+                 that nothing happened, wait with `wait` or check again for up to a minute, and look at `get updaterequests -A`,
+                 events and the background or cleanup controller's logs.
+               - For a report that sends a request out (an `apiCall` or service call to a URL, a token sent along), run a small
+                 listener pod in the lab, for example a plain HTTP server image, point the report's policy at its Service, and
+                 use the listener's logs as the evidence. Lab pods can pull images from the internet.
+               - If a release does not become ready, it may not support the lab's Kubernetes version: `lab-reset` with a
+                 Kubernetes version from that release's time, install it again, and say so in the verdict.
             3. `lab-reset` before the next release and before the next advisory.
 
             The lab records every command it runs, and the verdict comment lists them next to your evidence.
 
-            If a report needs something the lab cannot provide (a cloud provider, several nodes, an unreleased build, the
-            public internet), say exactly what was missing in your verdict and call `report_missing_tool` naming it, then
-            reason from what you could test.
+            If a report needs something the lab cannot provide (a cloud provider, several nodes, an unreleased build, signing
+            keys and a registry), and the CLI cannot show it either, it is `not-tested`.
           GH_AW_SAFE_OUTPUTS: ${{ runner.temp }}/gh-aw/safeoutputs/outputs.jsonl
           OTEL_EXPORTER_OTLP_ENDPOINT: ""
           OTEL_EXPORTER_OTLP_HEADERS: ""
@@ -528,30 +503,20 @@ jobs:
         with:
           github-token: no-authentication
           script: |
-            const promptEnvironment = new Set(["GH_AW_ACTIONS_DIR","GH_AW_ENGINE_ID","GH_AW_EXPR_76DF9333","GH_AW_EXPR_77C1A4D2","GH_AW_EXPR_7C248226","GH_AW_EXPR_C19C384F","GH_AW_GITHUB_ACTOR","GH_AW_GITHUB_REPOSITORY","GH_AW_GITHUB_RUN_ID","GH_AW_GITHUB_WORKSPACE","GH_AW_MCP_CLI_SERVERS_LIST","GH_AW_NEEDS_COLLECT_OUTPUTS_JSON","GH_AW_PROMPT","GH_AW_SKILL_DIR","GH_AW_SKILL_EXT","GH_AW_SUB_AGENT_DIR","GH_AW_SUB_AGENT_EXT","GITHUB_ACTION","GITHUB_ACTOR","GITHUB_API_URL","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","GITHUB_GRAPHQL_URL","GITHUB_JOB","GITHUB_OUTPUT","GITHUB_REF","GITHUB_REPOSITORY","GITHUB_RUN_ATTEMPT","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_SERVER_URL","GITHUB_SHA","GITHUB_STEP_SUMMARY","GITHUB_WORKFLOW","GITHUB_WORKSPACE","PATH","RUNNER_ARCH","RUNNER_OS","RUNNER_TEMP"]);
+            const promptEnvironment = new Set(["GH_AW_ACTIONS_DIR","GH_AW_ENGINE_ID","GH_AW_MCP_CLI_SERVERS_LIST","GH_AW_PROMPT","GH_AW_SKILL_DIR","GH_AW_SKILL_EXT","GH_AW_SUB_AGENT_DIR","GH_AW_SUB_AGENT_EXT","GITHUB_ACTION","GITHUB_ACTOR","GITHUB_API_URL","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","GITHUB_GRAPHQL_URL","GITHUB_JOB","GITHUB_OUTPUT","GITHUB_REF","GITHUB_REPOSITORY","GITHUB_RUN_ATTEMPT","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_SERVER_URL","GITHUB_SHA","GITHUB_STEP_SUMMARY","GITHUB_WORKFLOW","GITHUB_WORKSPACE","PATH","RUNNER_ARCH","RUNNER_OS","RUNNER_TEMP"]);
             for (const name of Object.keys(process.env)) {
               if (!promptEnvironment.has(name)) delete process.env[name];
             }
             global.core = core;
             global.context = context;
             const { main } = require(process.env.GH_AW_ACTIONS_DIR + '/interpolate_prompt.cjs');
-            await main({ authorExpressions: {"needs.collect.outputs.json":"GH_AW_NEEDS_COLLECT_OUTPUTS_JSON"} });
+            await main();
         env:
           GH_AW_ACTIONS_DIR: ${{ runner.temp }}/gh-aw/actions
           GH_AW_ENGINE_ID: copilot
-          GH_AW_EXPR_76DF9333: ${{ github.event.pull_request.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'pull_request' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_77C1A4D2: ${{ github.event.comment.id || fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').comment_id }}
-          GH_AW_EXPR_7C248226: ${{ github.event.issue.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'issue' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_C19C384F: ${{ github.event.discussion.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'discussion' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
-          GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
-          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
           GH_AW_MCP_CLI_SERVERS_LIST: |-
-            - `github` — run `github --help` to see available tools
             - `mcpscripts` — run `mcpscripts --help` to see available tools
             - `safeoutputs` — run `safeoutputs --help` to see available tools
-          GH_AW_NEEDS_COLLECT_OUTPUTS_JSON: ${{ needs.collect.outputs.json }}
           GH_AW_OTLP_ENDPOINTS: ""
           GH_AW_OTLP_IF_MISSING: ""
           GH_AW_OTLP_LOGS_ENABLED: ""
@@ -571,7 +536,7 @@ jobs:
         with:
           github-token: no-authentication
           script: |
-            const promptEnvironment = new Set(["GH_AW_ACTIONS_DIR","GH_AW_EXPR_76DF9333","GH_AW_EXPR_77C1A4D2","GH_AW_EXPR_7C248226","GH_AW_EXPR_C19C384F","GH_AW_GITHUB_ACTOR","GH_AW_GITHUB_REPOSITORY","GH_AW_GITHUB_RUN_ID","GH_AW_GITHUB_WORKSPACE","GH_AW_MCP_CLI_SERVERS_LIST","GH_AW_NEEDS_COLLECT_OUTPUTS_JSON","GH_AW_PROMPT","GITHUB_ACTION","GITHUB_ACTOR","GITHUB_API_URL","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","GITHUB_GRAPHQL_URL","GITHUB_JOB","GITHUB_OUTPUT","GITHUB_REF","GITHUB_REPOSITORY","GITHUB_RUN_ATTEMPT","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_SERVER_URL","GITHUB_SHA","GITHUB_STEP_SUMMARY","GITHUB_WORKFLOW","GITHUB_WORKSPACE","PATH","RUNNER_ARCH","RUNNER_OS","RUNNER_TEMP"]);
+            const promptEnvironment = new Set(["GH_AW_ACTIONS_DIR","GH_AW_MCP_CLI_SERVERS_LIST","GH_AW_PROMPT","GITHUB_ACTION","GITHUB_ACTOR","GITHUB_API_URL","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","GITHUB_GRAPHQL_URL","GITHUB_JOB","GITHUB_OUTPUT","GITHUB_REF","GITHUB_REPOSITORY","GITHUB_RUN_ATTEMPT","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_SERVER_URL","GITHUB_SHA","GITHUB_STEP_SUMMARY","GITHUB_WORKFLOW","GITHUB_WORKSPACE","PATH","RUNNER_ARCH","RUNNER_OS","RUNNER_TEMP"]);
             for (const name of Object.keys(process.env)) {
               if (!promptEnvironment.has(name)) delete process.env[name];
             }
@@ -584,33 +549,14 @@ jobs:
             return await substitutePlaceholders({
               file: process.env.GH_AW_PROMPT,
               substitutions: {
-                GH_AW_EXPR_76DF9333: process.env.GH_AW_EXPR_76DF9333,
-                GH_AW_EXPR_77C1A4D2: process.env.GH_AW_EXPR_77C1A4D2,
-                GH_AW_EXPR_7C248226: process.env.GH_AW_EXPR_7C248226,
-                GH_AW_EXPR_C19C384F: process.env.GH_AW_EXPR_C19C384F,
-                GH_AW_GITHUB_ACTOR: process.env.GH_AW_GITHUB_ACTOR,
-                GH_AW_GITHUB_REPOSITORY: process.env.GH_AW_GITHUB_REPOSITORY,
-                GH_AW_GITHUB_RUN_ID: process.env.GH_AW_GITHUB_RUN_ID,
-                GH_AW_GITHUB_WORKSPACE: process.env.GH_AW_GITHUB_WORKSPACE,
-                GH_AW_MCP_CLI_SERVERS_LIST: process.env.GH_AW_MCP_CLI_SERVERS_LIST,
-                GH_AW_NEEDS_COLLECT_OUTPUTS_JSON: process.env.GH_AW_NEEDS_COLLECT_OUTPUTS_JSON
+                GH_AW_MCP_CLI_SERVERS_LIST: process.env.GH_AW_MCP_CLI_SERVERS_LIST
               }
             });
         env:
           GH_AW_ACTIONS_DIR: ${{ runner.temp }}/gh-aw/actions
-          GH_AW_EXPR_76DF9333: ${{ github.event.pull_request.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'pull_request' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_77C1A4D2: ${{ github.event.comment.id || fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').comment_id }}
-          GH_AW_EXPR_7C248226: ${{ github.event.issue.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'issue' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_C19C384F: ${{ github.event.discussion.number || (fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_type == 'discussion' && fromJSON(steps.generate_aw_info.outputs.aw_context || '{}').item_number) }}
-          GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
-          GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
-          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
           GH_AW_MCP_CLI_SERVERS_LIST: |-
-            - `github` — run `github --help` to see available tools
             - `mcpscripts` — run `mcpscripts --help` to see available tools
             - `safeoutputs` — run `safeoutputs --help` to see available tools
-          GH_AW_NEEDS_COLLECT_OUTPUTS_JSON: ${{ needs.collect.outputs.json }}
           GH_AW_OTLP_ENDPOINTS: ""
           GH_AW_OTLP_IF_MISSING: ""
           GH_AW_OTLP_LOGS_ENABLED: ""
@@ -810,6 +756,15 @@ jobs:
         with:
           name: activation
           path: /tmp/gh-aw
+      - name: Download the advisories
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: security-triage-advisories
+          path: /tmp/gh-aw/security-triage/input
+      - env:
+          COUNT: ${{ needs.collect.outputs.count }}
+        name: Check the advisories arrived
+        run: "python3 - <<'PY'\nimport json, os\nwith open(\"/tmp/gh-aw/security-triage/input/advisories.json\") as f:\n    got = len(json.load(f)[\"advisories\"])\nwant = int(os.environ[\"COUNT\"])\nif got != want:\n    raise SystemExit(f\"::error::collect picked {want} advisories but the agent's input holds {got}\")\nprint(f\"{got} advisories for the agent\")\nPY\n"
       - name: Download the report manifests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -822,7 +777,7 @@ jobs:
           CONTEXT_URLS: "[\"https://raw.githubusercontent.com/kyverno/website/main/src/content/docs/docs/guides/security.md\",\"https://raw.githubusercontent.com/kyverno/website/main/src/content/docs/docs/policy-types/cel-libraries.mdx\",\"https://raw.githubusercontent.com/kyverno/website/main/src/content/docs/docs/guides/migration-to-cel.md\"]"
           GH_TOKEN: ${{ github.token }}
         name: Install the CLI and fetch context
-        run: "python3 - <<'PY'\nimport json, os, re, subprocess, tarfile, tempfile, urllib.request\nrepo, asset_tpl, binary = os.environ[\"CLI_REPO\"], os.environ[\"CLI_ASSET\"], os.environ[\"CLI_BINARY\"]\nbase = \"/tmp/gh-aw/security-triage\"\nos.makedirs(f\"{base}/context\", exist_ok=True)\nos.makedirs(f\"{base}/repro\", exist_ok=True)\n\nr = subprocess.run([\"gh\", \"api\", f\"repos/{repo}/releases?per_page=50\"], capture_output=True, text=True, check=True)\ntags = [x[\"tag_name\"] for x in json.loads(r.stdout) if not x[\"draft\"] and not x[\"prerelease\"]]\ndef ver(t):\n    m = re.match(r\"v?(\\d+)\\.(\\d+)\\.(\\d+)$\", t)\n    return tuple(map(int, m.groups())) if m else None\ntags = sorted((t for t in tags if ver(t)), key=ver, reverse=True)\nlatest = tags[0]\nprevious = next((t for t in tags if ver(t)[:2] < ver(latest)[:2]), None)\n\ninstalled = {}\nfor name, tag in ((\"latest\", latest), (\"previous\", previous)):\n    if not tag:\n        continue\n    asset = asset_tpl.replace(\"{tag}\", tag)\n    with tempfile.TemporaryDirectory() as d:\n        subprocess.run([\"gh\", \"release\", \"download\", tag, \"-R\", repo, \"-p\", asset, \"-D\", d], check=True)\n        with tarfile.open(os.path.join(d, asset)) as tf:\n            member = next(m for m in tf.getmembers() if os.path.basename(m.name) == binary and m.isfile())\n            member.name = binary\n            tf.extract(member, d, filter=\"data\")\n        target = f\"/usr/local/bin/{binary}-{name}\"\n        subprocess.run([\"sudo\", \"install\", \"-m\", \"0755\", os.path.join(d, binary), target], check=True)\n    installed[f\"{binary}-{name}\"] = tag\nwith open(f\"{base}/versions.json\", \"w\") as f:\n    json.dump(installed, f, indent=2)\nprint(\"Installed:\", installed)\n\nfor i, url in enumerate(json.loads(os.environ[\"CONTEXT_URLS\"])):\n    name = f\"{i:02d}-\" + re.sub(r\"[^A-Za-z0-9._-]\", \"_\", url.rsplit(\"/\", 1)[-1])[:80]\n    try:\n        with urllib.request.urlopen(url, timeout=30) as resp:\n            data = resp.read(400_000)\n        with open(f\"{base}/context/{name}\", \"wb\") as f:\n            f.write(data)\n        print(\"Fetched context:\", url)\n    except Exception as e:\n        print(f\"::warning::Could not fetch context {url}: {e}\")\nPY\n"
+        run: "python3 - <<'PY'\nimport json, os, re, subprocess, tarfile, tempfile, urllib.request\nrepo, asset_tpl, binary = os.environ[\"CLI_REPO\"], os.environ[\"CLI_ASSET\"], os.environ[\"CLI_BINARY\"]\nbase = \"/tmp/gh-aw/security-triage\"\nos.makedirs(f\"{base}/context\", exist_ok=True)\nos.makedirs(f\"{base}/repro\", exist_ok=True)\n\nr = subprocess.run([\"gh\", \"api\", f\"repos/{repo}/releases?per_page=50\"], capture_output=True, text=True, check=True)\ntags = [x[\"tag_name\"] for x in json.loads(r.stdout) if not x[\"draft\"] and not x[\"prerelease\"]]\ndef ver(t):\n    m = re.match(r\"v?(\\d+)\\.(\\d+)\\.(\\d+)$\", t)\n    return tuple(map(int, m.groups())) if m else None\ntags = sorted((t for t in tags if ver(t)), key=ver, reverse=True)\nlatest = tags[0]\nprevious = next((t for t in tags if ver(t)[:2] < ver(latest)[:2]), None)\n\ndef install(tag, name):\n    asset = asset_tpl.replace(\"{tag}\", tag)\n    with tempfile.TemporaryDirectory() as d:\n        subprocess.run([\"gh\", \"release\", \"download\", tag, \"-R\", repo, \"-p\", asset, \"-D\", d], check=True)\n        with tarfile.open(os.path.join(d, asset)) as tf:\n            member = next(m for m in tf.getmembers() if os.path.basename(m.name) == binary and m.isfile())\n            member.name = binary\n            tf.extract(member, d, filter=\"data\")\n        target = f\"/usr/local/bin/{binary}-{name}\"\n        subprocess.run([\"sudo\", \"install\", \"-m\", \"0755\", os.path.join(d, binary), target], check=True)\n\ninstalled = {}\nfor name, tag in ((\"latest\", latest), (\"previous\", previous)):\n    if tag:\n        install(tag, name)\n        installed[f\"{binary}-{name}\"] = tag\n\n# The reported release, so a report that needs only the CLI is tested on the release it names. Collect worked\n# it out from the advisory's version range; with one advisory per run there is one. An older release whose\n# asset is missing or named differently is skipped, and the agent falls back to the closest release it can run.\nwith open(f\"{base}/input/advisories.json\") as f:\n    reported = {a.get(\"reported_release\") for a in json.load(f)[\"advisories\"]} - {None}\nif len(reported) == 1:\n    tag = reported.pop()\n    try:\n        install(tag, \"reported\")\n        installed[f\"{binary}-reported\"] = tag\n    except (subprocess.CalledProcessError, StopIteration, OSError, tarfile.TarError) as e:\n        print(f\"::warning::Could not install the CLI for the reported release {tag}: {e}\")\nwith open(f\"{base}/versions.json\", \"w\") as f:\n    json.dump(installed, f, indent=2)\nprint(\"Installed:\", installed)\n\nfor i, url in enumerate(json.loads(os.environ[\"CONTEXT_URLS\"])):\n    name = f\"{i:02d}-\" + re.sub(r\"[^A-Za-z0-9._-]\", \"_\", url.rsplit(\"/\", 1)[-1])[:80]\n    try:\n        with urllib.request.urlopen(url, timeout=30) as resp:\n            data = resp.read(400_000)\n        with open(f\"{base}/context/{name}\", \"wb\") as f:\n            f.write(data)\n        print(\"Fetched context:\", url)\n    except Exception as e:\n        print(f\"::warning::Could not fetch context {url}: {e}\")\nPY\n"
       - env:
           HELM_REPO: https://kyverno.github.io/kyverno/
           LAB_CHART: lab/kyverno
@@ -863,18 +818,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_HOST: github.com
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.29.11 --rootless
-      - name: Determine automatic lockdown mode for GitHub MCP Server
-        id: determine-automatic-lockdown
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
-          GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
-        with:
-          script: |
-            const path = require('path');
-            const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');
-            const determineAutomaticLockdown = require(path.join(actionsDir, 'determine_automatic_lockdown.cjs'));
-            await determineAutomaticLockdown(github, context, core);
       - name: Restore agent config folders from base branch
         if: steps.checkout-pr.outputs.checked_out == 'true'
         env:
@@ -891,7 +834,7 @@ jobs:
           GH_AW_SKILL_DIR: ".github/skills"
         run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_inline_skills.sh"
       - name: Download container images
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.29.11@sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e ghcr.io/github/gh-aw-firewall/api-proxy:0.29.11@sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c ghcr.io/github/gh-aw-firewall/squid:0.29.11@sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847 ghcr.io/github/gh-aw-mcpg:v0.5.6@sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311 ghcr.io/github/gh-aw-node@sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc ghcr.io/github/github-mcp-server:v2.1.0@sha256:f6056fc10bfffcc8c81a6417a2e9ca12808647e8dd6049642a4feaadee0e0f8a
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.29.11@sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e ghcr.io/github/gh-aw-firewall/api-proxy:0.29.11@sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c ghcr.io/github/gh-aw-firewall/squid:0.29.11@sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847 ghcr.io/github/gh-aw-mcpg:v0.5.6@sha256:342cd624e1f179d91be2de7a146fc4f387092e62e6c8a47506d7932e113d2311 ghcr.io/github/gh-aw-node@sha256:8735428c2d4e602f90781ba0c571c400e8ff93c7ee1508a75d71f87e34e415cc
       - name: Prepare Safe Outputs Directories
         run: |
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
@@ -902,7 +845,7 @@ jobs:
         env:
           GH_AW_FILE_ROOT: "${{ runner.temp }}/gh-aw"
           GH_AW_FILE_CONFIG: "{\"files\":[{\"path\":\"safeoutputs/config.json\",\"content_env\":\"GH_AW_SAFE_OUTPUTS_CONFIG\"}]}"
-          GH_AW_SAFE_OUTPUTS_CONFIG: "{\"create_report_incomplete_issue\":{},\"noop\":{\"max\":2,\"report-as-issue\":\"false\"},\"post-advisory-verdict\":{\"description\":\"Record the triage verdict for one advisory listed in the run, never for any other. Call it as soon as you have a result, and again when you know more: the last call for an advisory replaces the earlier ones.\",\"inputs\":{\"assessment\":{\"default\":null,\"description\":\"Why you chose this classification and CVSS vector, citing the report and the context documents.\",\"maxLength\":3000,\"required\":true,\"type\":\"string\"},\"classification\":{\"default\":null,\"description\":\"About result_release only, even if a newer one no longer shows it (that goes in fixed_in). reproduced: the reported impact reproduced. needs-non-default-config: it reproduces only with a configuration, permission or policy the project documents as the operator's responsibility. not-reproduced: you followed the report and it did not reproduce. needs-more-info: the report lacks what is needed to try. possible-duplicate: it matches a published advisory.\",\"options\":[\"reproduced\",\"needs-non-default-config\",\"not-reproduced\",\"needs-more-info\",\"possible-duplicate\"],\"required\":true,\"type\":\"choice\"},\"closest_release\":{\"default\":null,\"description\":\"true if the reported release could not be run and result_release is the closest you could run.\",\"required\":false,\"type\":\"boolean\"},\"evidence\":{\"default\":null,\"description\":\"Commands you ran and the relevant lines of their output. Excerpts only, no secrets.\",\"maxLength\":5000,\"required\":false,\"type\":\"string\"},\"fixed_in\":{\"default\":null,\"description\":\"The first newer release you tested on which the reported impact no longer appeared, e.g. v1.16.4. Empty if every release you tested still showed it, or you could not test a newer one.\",\"maxLength\":40,\"required\":false,\"type\":\"string\"},\"ghsa_id\":{\"default\":null,\"description\":\"The advisory's GHSA ID, exactly as listed in the run's advisories.\",\"required\":true,\"type\":\"string\"},\"questions_for_reporter\":{\"default\":null,\"description\":\"What the reporter should add or clarify, one question per line. Empty if none.\",\"maxLength\":1500,\"required\":false,\"type\":\"string\"},\"related_advisories\":{\"default\":null,\"description\":\"GHSA IDs of published advisories this may duplicate, comma-separated. Empty if none.\",\"maxLength\":200,\"required\":false,\"type\":\"string\"},\"reproduced\":{\"default\":null,\"description\":\"true only if you ran it and observed the reported impact.\",\"required\":true,\"type\":\"boolean\"},\"result_release\":{\"default\":null,\"description\":\"The release the classification is about, e.g. v1.16.1: the reported release, or the closest release you could run if neither the CLI nor the lab could run the reported one. Empty if you ran nothing.\",\"maxLength\":40,\"required\":false,\"type\":\"string\"},\"steps_tried\":{\"default\":null,\"description\":\"What you did, as a short numbered list of steps a maintainer can repeat.\",\"maxLength\":4000,\"required\":true,\"type\":\"string\"},\"suggested_cvss_vector\":{\"default\":null,\"description\":\"Your CVSS 3.1 vector for what you observed on result_release, e.g. CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N. The severity is computed from it. Empty if not a vulnerability.\",\"maxLength\":60,\"required\":false,\"type\":\"string\"},\"tested_versions\":{\"default\":null,\"description\":\"Comma-separated releases you ran, with the CLI or in the lab, e.g. v1.16.1, v1.16.4. Empty if none.\",\"maxLength\":200,\"required\":false,\"type\":\"string\"}},\"max\":20,\"output\":\"Verdict recorded.\",\"supports_dependencies\":false},\"report_incomplete\":{},\"report_missing_data\":{},\"report_missing_tool\":{}}"
+          GH_AW_SAFE_OUTPUTS_CONFIG: "{\"create_report_incomplete_issue\":{},\"noop\":{\"max\":2,\"report-as-issue\":\"false\"},\"post-advisory-verdict\":{\"description\":\"Record the triage verdict for one advisory listed in the run, never for any other. Call it as soon as you have a result, and again when you know more: the last call for an advisory replaces the earlier ones.\",\"inputs\":{\"assessment\":{\"default\":null,\"description\":\"Why you chose this classification and CVSS vector, citing the report and the context documents.\",\"maxLength\":3000,\"required\":true,\"type\":\"string\"},\"classification\":{\"default\":null,\"description\":\"About result_release only, even if a newer one no longer shows it (that goes in fixed_in). reproduced: the reported impact reproduced. needs-non-default-config: it reproduces only with a configuration, permission or policy the project documents as the operator's responsibility. not-reproduced: you followed the report and it did not reproduce. needs-more-info: the report lacks what is needed to try. possible-duplicate: it matches a published advisory. not-tested: the report is about something the CLI and the lab cannot run.\",\"options\":[\"reproduced\",\"needs-non-default-config\",\"not-reproduced\",\"needs-more-info\",\"possible-duplicate\",\"not-tested\"],\"required\":true,\"type\":\"choice\"},\"closest_release\":{\"default\":null,\"description\":\"true if the reported release could not be run and result_release is the closest you could run.\",\"required\":false,\"type\":\"boolean\"},\"evidence\":{\"default\":null,\"description\":\"Commands you ran and the relevant lines of their output. Excerpts only, no secrets.\",\"maxLength\":5000,\"required\":false,\"type\":\"string\"},\"fixed_in\":{\"default\":null,\"description\":\"The first newer release you tested on which the reported impact no longer appeared, e.g. v1.16.4. Empty if every release you tested still showed it, or you could not test a newer one.\",\"maxLength\":40,\"required\":false,\"type\":\"string\"},\"ghsa_id\":{\"default\":null,\"description\":\"The advisory's GHSA ID, exactly as listed in the run's advisories.\",\"required\":true,\"type\":\"string\"},\"questions_for_reporter\":{\"default\":null,\"description\":\"What the reporter should add or clarify, one question per line. Empty if none.\",\"maxLength\":1500,\"required\":false,\"type\":\"string\"},\"related_advisories\":{\"default\":null,\"description\":\"GHSA IDs of published advisories this may duplicate, comma-separated. Empty if none.\",\"maxLength\":200,\"required\":false,\"type\":\"string\"},\"reproduced\":{\"default\":null,\"description\":\"true only if you ran it and observed the reported impact.\",\"required\":true,\"type\":\"boolean\"},\"result_release\":{\"default\":null,\"description\":\"The release the classification is about, e.g. v1.16.1: the reported release, or the closest release you could run if neither the CLI nor the lab could run the reported one. Empty if you ran nothing.\",\"maxLength\":40,\"required\":false,\"type\":\"string\"},\"steps_tried\":{\"default\":null,\"description\":\"What you did, as a short numbered list of steps a maintainer can repeat.\",\"maxLength\":4000,\"required\":true,\"type\":\"string\"},\"suggested_cvss_vector\":{\"default\":null,\"description\":\"Your CVSS 3.1 vector for what you observed on result_release, e.g. CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N. The severity is computed from it. Empty if not a vulnerability.\",\"maxLength\":60,\"required\":false,\"type\":\"string\"},\"tested_versions\":{\"default\":null,\"description\":\"Comma-separated releases you ran, with the CLI or in the lab, e.g. v1.16.1, v1.16.4. Empty if none.\",\"maxLength\":200,\"required\":false,\"type\":\"string\"}},\"max\":20,\"output\":\"Verdict recorded.\",\"supports_dependencies\":false},\"report_incomplete\":{},\"report_missing_data\":{},\"report_missing_tool\":{}}"
         with:
           script: |
             const path = require('path');
@@ -929,13 +872,14 @@ jobs:
                         "type": "string"
                       },
                       "classification": {
-                        "description": "About result_release only, even if a newer one no longer shows it (that goes in fixed_in). reproduced: the reported impact reproduced. needs-non-default-config: it reproduces only with a configuration, permission or policy the project documents as the operator's responsibility. not-reproduced: you followed the report and it did not reproduce. needs-more-info: the report lacks what is needed to try. possible-duplicate: it matches a published advisory.",
+                        "description": "About result_release only, even if a newer one no longer shows it (that goes in fixed_in). reproduced: the reported impact reproduced. needs-non-default-config: it reproduces only with a configuration, permission or policy the project documents as the operator's responsibility. not-reproduced: you followed the report and it did not reproduce. needs-more-info: the report lacks what is needed to try. possible-duplicate: it matches a published advisory. not-tested: the report is about something the CLI and the lab cannot run.",
                         "enum": [
                           "reproduced",
                           "needs-non-default-config",
                           "not-reproduced",
                           "needs-more-info",
-                          "possible-duplicate"
+                          "possible-duplicate",
+                          "not-tested"
                         ],
                         "type": "string"
                       },
@@ -1330,10 +1274,6 @@ jobs:
           GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
           GH_AW_SAFE_OUTPUTS_CONFIG_PATH: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS_CONFIG_PATH }}
           GH_AW_SAFE_OUTPUTS_TOOLS_PATH: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS_TOOLS_PATH }}
-          GH_AW_SINK_VISIBILITY: ${{ steps.determine-automatic-lockdown.outputs.visibility }}
-          GITHUB_MCP_GUARD_MIN_INTEGRITY: ${{ steps.determine-automatic-lockdown.outputs.min_integrity }}
-          GITHUB_MCP_GUARD_REPOS: ${{ steps.determine-automatic-lockdown.outputs.repos }}
-          GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
@@ -1370,39 +1310,14 @@ jobs:
 
           mkdir -p "$HOME/.copilot"
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_0b520a1f3775eae8_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_ed7951e39bab1f8f_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
-              "github": {
-                "type": "stdio",
-                "container": "ghcr.io/github/github-mcp-server:v2.1.0",
-                "env": {
-                  "GITHUB_FEATURES": "fields_param",
-                  "GITHUB_HOST": "${GITHUB_SERVER_URL}",
-                  "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_MCP_SERVER_TOKEN}",
-                  "GITHUB_READ_ONLY": "1",
-                  "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
-                },
-                "guard-policies": {
-                  "allow-only": {
-                    "min-integrity": "$GITHUB_MCP_GUARD_MIN_INTEGRITY",
-                    "repos": "$GITHUB_MCP_GUARD_REPOS"
-                  }
-                }
-              },
               "mcpscripts": {
                 "type": "http",
                 "url": "http://host.docker.internal:$GH_AW_MCP_SCRIPTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_MCP_SCRIPTS_API_KEY}"
-                },
-                "guard-policies": {
-                  "write-sink": {
-                    "accept": [
-                      "*"
-                    ],
-                    "sink-visibility": "${GH_AW_SINK_VISIBILITY}"
-                  }
                 }
               },
               "safeoutputs": {
@@ -1441,14 +1356,6 @@ jobs:
                   "GH_AW_OBJECT_PACK_MAX_OBJECTS": "\${GH_AW_OBJECT_PACK_MAX_OBJECTS}",
                   "GH_AW_OBJECT_PACK_TIMEOUT_MS": "\${GH_AW_OBJECT_PACK_TIMEOUT_MS}",
                   "GH_AW_OBJECT_PACK_FETCH_DEPTHS": "\${GH_AW_OBJECT_PACK_FETCH_DEPTHS}"
-                },
-                "guard-policies": {
-                  "write-sink": {
-                    "accept": [
-                      "*"
-                    ],
-                    "sink-visibility": "${GH_AW_SINK_VISIBILITY}"
-                  }
                 }
               }
             },
@@ -1465,7 +1372,7 @@ jobs:
               }
             }
           }
-          GH_AW_MCP_CONFIG_0b520a1f3775eae8_EOF
+          GH_AW_MCP_CONFIG_ed7951e39bab1f8f_EOF
       - name: Mount MCP servers as CLIs
         id: mount-mcp-clis
         continue-on-error: true
@@ -1490,34 +1397,21 @@ jobs:
         id: pre_agent_audit
         continue-on-error: true
         run: bash "${RUNNER_TEMP}/gh-aw/actions/audit_pre_agent_workspace.sh"
-      - name: Log GitHub rate limits at agent start
-        continue-on-error: true
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
-          script: |
-            const path = require('path');
-            const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');
-            const { setupGlobals } = require(path.join(actionsDir, 'setup_globals.cjs'));
-            setupGlobals(core, github, context, exec, io, getOctokit);
-            const { fetchAndLogRateLimit } = require(path.join(actionsDir, 'github_rate_limit_logger.cjs'));
-            await fetchAndLogRateLimit(github, 'agent_start', true);
       - name: Execute GitHub Copilot CLI
         id: agentic_execution
         # Copilot CLI tool arguments (sorted):
-        # --allow-tool github
         # --allow-tool mcpscripts
         # --allow-tool safeoutputs
         # --allow-tool shell(cat)
         # --allow-tool shell(date)
         # --allow-tool shell(diff)
         # --allow-tool shell(echo)
-        # --allow-tool shell(github:*)
         # --allow-tool shell(grep)
         # --allow-tool shell(head)
         # --allow-tool shell(jq)
         # --allow-tool shell(kyverno-latest:*)
         # --allow-tool shell(kyverno-previous:*)
+        # --allow-tool shell(kyverno-reported:*)
         # --allow-tool shell(ls)
         # --allow-tool shell(mcpscripts:*)
         # --allow-tool shell(mkdir)
@@ -1557,9 +1451,9 @@ jobs:
           export GH_AW_NODE_BIN
           export COPILOT_API_KEY="$COPILOT_DUMMY_BYOK"
           (umask 177 && touch /tmp/gh-aw/agent-stdio.log)
-          GH_AW_MAX_AI_CREDITS="${GH_AW_MAX_AI_CREDITS:-1000}"
+          GH_AW_MAX_AI_CREDITS="200"
           if [[ ! "$GH_AW_MAX_AI_CREDITS" =~ ^[0-9]+$ ]]; then
-            GH_AW_MAX_AI_CREDITS="1000"
+            GH_AW_MAX_AI_CREDITS="200"
           fi
           if [[ "${GH_AW_ADMISSION_RESULT:-}" == "admitted" && -z "${GH_AW_ADMISSION_MAX_AI_CREDITS:-}" ]]; then
             echo "ERR_ADMISSION: Missing required runtime admission allowance." >&2
@@ -1577,7 +1471,7 @@ jobs:
             echo "No component admission allowance; retaining existing budget policy (value withheld)."
           fi
           unset GH_AW_ADMISSION_RESULT GH_AW_ADMISSION_MAX_AI_CREDITS
-          printf '%s\n' "{\"\$schema\":\"https://github.com/github/gh-aw-firewall/releases/download/v0.29.11/awf-config.schema.json\",\"network\":{\"allowDomains\":[\"archive.ubuntu.com\",\"azure.archive.ubuntu.com\",\"crl.geotrust.com\",\"crl.globalsign.com\",\"crl.identrust.com\",\"crl.sectigo.com\",\"crl.thawte.com\",\"crl.usertrust.com\",\"crl.verisign.com\",\"crl3.digicert.com\",\"crl4.digicert.com\",\"crls.ssl.com\",\"json-schema.org\",\"json.schemastore.org\",\"keyserver.ubuntu.com\",\"ocsp.digicert.com\",\"ocsp.geotrust.com\",\"ocsp.globalsign.com\",\"ocsp.identrust.com\",\"ocsp.sectigo.com\",\"ocsp.ssl.com\",\"ocsp.thawte.com\",\"ocsp.usertrust.com\",\"ocsp.verisign.com\",\"s.symcb.com\",\"s.symcd.com\",\"security.ubuntu.com\",\"ts-crl.ws.symantec.com\",\"ts-ocsp.ws.symantec.com\"],\"isolation\":true,\"topologyAttach\":[\"awmg-mcpg\"]},\"apiProxy\":{\"enabled\":true,\"enableTokenSteering\":true,\"maxRuns\":500,\"maxAiCredits\":${GH_AW_MAX_AI_CREDITS},\"maxCacheMisses\":5,\"models\":{\"agent\":[\"sonnet-6x\",\"gpt-6\",\"gpt-5.4\",\"gpt-5.5\",\"gpt-5.6\",\"gpt-5.3\",\"gemini-pro\",\"any\"],\"antigravity\":[\"copilot/antigravity*\",\"google/antigravity*\",\"gemini/antigravity*\"],\"any\":[\"copilot/*\",\"anthropic/*\",\"openai/*\",\"google/*\",\"gemini/*\"],\"auto\":[\"copilot/auto\",\"large\"],\"claude\":[\"agent\"],\"codex\":[\"agent\"],\"coding\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\",\"gpt-5-codex\",\"kimi\"],\"computer-use\":[\"copilot/*computer-use*\",\"google/*computer-use*\",\"gemini/*computer-use*\",\"openai/*computer-use*\"],\"copilot\":[\"agent\"],\"deep-research\":[\"copilot/deep-research*\",\"copilot/o3-deep-research*\",\"copilot/o4-mini-deep-research*\",\"google/deep-research*\",\"gemini/deep-research*\",\"openai/o3-deep-research*\",\"openai/o4-mini-deep-research*\"],\"detection\":[\"small\",\"copilot/gpt-*-luna\",\"openai/gpt-*-luna\",\"small-agent\",\"agent\"],\"evals\":[\"copilot/gpt-6-luna-decisions\"],\"fable\":[\"copilot/*fable*\",\"anthropic/*fable*\"],\"gemini\":[\"agent\"],\"gemini-3-flash\":[\"copilot/gemini-3*flash*\",\"google/gemini-3*flash*\",\"gemini/gemini-3*flash*\"],\"gemini-3-pro\":[\"copilot/gemini-3*pro*\",\"google/gemini-3*pro*\",\"google/nano-banana*\",\"gemini/gemini-3*pro*\"],\"gemini-3.1-flash\":[\"copilot/gemini-3.1*flash*\",\"google/gemini-3.1*flash*\",\"gemini/gemini-3.1*flash*\"],\"gemini-3.1-pro\":[\"copilot/gemini-3.1*pro*\",\"google/gemini-3.1*pro*\",\"gemini/gemini-3.1*pro*\"],\"gemini-3.5-flash\":[\"copilot/gemini-3.5*flash*\",\"google/gemini-3.5*flash*\",\"gemini/gemini-3.5*flash*\"],\"gemini-3.6-flash\":[\"copilot/gemini-3.6*flash*\",\"google/gemini-3.6*flash*\",\"gemini/gemini-3.6*flash*\"],\"gemini-3.7-flash\":[\"copilot/gemini-3.7*flash*\",\"google/gemini-3.7*flash*\",\"gemini/gemini-3.7*flash*\"],\"gemini-3.8-flash\":[\"copilot/gemini-3.8*flash*\",\"google/gemini-3.8*flash*\",\"gemini/gemini-3.8*flash*\"],\"gemini-flash\":[\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"],\"gemini-flash-lite\":[\"copilot/gemini-*flash*lite*\",\"google/gemini-*flash*lite*\",\"gemini/gemini-*flash*lite*\"],\"gemini-omni\":[\"copilot/gemini-omni*\",\"google/gemini-omni*\",\"gemini/gemini-omni*\"],\"gemini-pro\":[\"copilot/gemini-*pro*\",\"google/gemini-*pro*\",\"gemini/gemini-*pro*\"],\"gemma\":[\"copilot/gemma*\",\"google/gemma*\",\"gemini/gemma*\"],\"gpt-5\":[\"copilot/gpt-5*\",\"openai/gpt-5*\"],\"gpt-5-codex\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\"],\"gpt-5-mini\":[\"copilot/gpt-5*mini*\",\"openai/gpt-5*mini*\"],\"gpt-5-nano\":[\"copilot/gpt-5*nano*\",\"openai/gpt-5*nano*\"],\"gpt-5-pro\":[\"copilot/gpt-5*pro*\",\"openai/gpt-5*pro*\"],\"gpt-5.1\":[\"copilot/gpt-5.1*\",\"openai/gpt-5.1*\"],\"gpt-5.2\":[\"copilot/gpt-5.2*\",\"openai/gpt-5.2*\"],\"gpt-5.3\":[\"copilot/gpt-5.3*\",\"openai/gpt-5.3*\"],\"gpt-5.4\":[\"copilot/gpt-5.4*\",\"openai/gpt-5.4*\"],\"gpt-5.5\":[\"copilot/gpt-5.5*\",\"openai/gpt-5.5*\"],\"gpt-5.6\":[\"copilot/gpt-5.6*\",\"openai/gpt-5.6*\"],\"gpt-6\":[\"copilot/gpt-6*\",\"openai/gpt-6*\"],\"grok\":[\"copilot/*grok*\",\"openai/*grok*\"],\"haiku\":[\"copilot/*haiku*\",\"anthropic/*haiku*\"],\"image-generation\":[\"copilot/gpt-image*\",\"openai/gpt-image*\",\"openai/chatgpt-image*\",\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"google/imagen*\"],\"kimi\":[\"copilot/kimi*\",\"openai/kimi*\"],\"kiwi\":[\"copilot/kiwi*\",\"openai/kiwi*\"],\"large\":[\"sonnet\",\"gpt-6\",\"gpt-5-pro\",\"gpt-5\",\"gemini-pro\"],\"lyria\":[\"google/lyria*\",\"gemini/lyria*\",\"copilot/lyria*\"],\"mai-code\":[\"copilot/MAI-Code*\",\"copilot/mai-code*\",\"openai/MAI-Code*\"],\"mini\":[\"haiku\",\"gpt-5-mini\",\"gpt-5-nano\",\"gemini-flash-lite\"],\"nano-banana\":[\"copilot/nano-banana*\",\"google/nano-banana*\",\"gemini/nano-banana*\"],\"opus\":[\"copilot/*opus*\",\"anthropic/*opus*\"],\"opusplan\":[\"opus?effort=high\"],\"raptor-mini\":[\"copilot/raptor*\",\"openai/raptor*\"],\"reasoning\":[\"copilot/o1*\",\"copilot/o3*\",\"copilot/o4*\",\"openai/o1*\",\"openai/o3*\",\"openai/o4*\"],\"robotics\":[\"copilot/*robotics*\",\"google/*robotics*\",\"gemini/*robotics*\"],\"small\":[\"mini\"],\"small-agent\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash\"],\"sonnet\":[\"copilot/*sonnet*\",\"anthropic/*sonnet*\"],\"sonnet-6x\":[\"copilot/*sonnet-4.5*\",\"copilot/*sonnet-4.6*\",\"copilot/*sonnet-5*\",\"copilot/*sonnet-4-5-*\",\"anthropic/*sonnet-4-5-*\",\"copilot/*sonnet-4-6*\",\"anthropic/*sonnet-4-6*\",\"anthropic/*sonnet-5*\"],\"summarization\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash-lite\",\"mini\"],\"veo\":[\"google/veo*\",\"gemini/veo*\"],\"vision\":[\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"]}},\"container\":{\"imageTag\":\"0.29.11,squid=sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847,agent=sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e,agent-act=sha256:ab786b54e96f95204366fdf195f80758e14891ebb17afe9e2ddc8d98555ebb46,api-proxy=sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c,cli-proxy=sha256:97782bc0d8ff7f80f19ae2fdc5e1668517aa732a6fa077e64b8d3919238496d2\",\"agentTimeout\":90},\"logging\":{\"proxyLogsDir\":\"/tmp/gh-aw/sandbox/firewall/logs\",\"auditDir\":\"/tmp/gh-aw/sandbox/firewall/audit\"}}" > "${RUNNER_TEMP}/gh-aw/awf-config.json"
+          printf '%s\n' "{\"\$schema\":\"https://github.com/github/gh-aw-firewall/releases/download/v0.29.11/awf-config.schema.json\",\"network\":{\"allowDomains\":[\"archive.ubuntu.com\",\"azure.archive.ubuntu.com\",\"crl.geotrust.com\",\"crl.globalsign.com\",\"crl.identrust.com\",\"crl.sectigo.com\",\"crl.thawte.com\",\"crl.usertrust.com\",\"crl.verisign.com\",\"crl3.digicert.com\",\"crl4.digicert.com\",\"crls.ssl.com\",\"json-schema.org\",\"json.schemastore.org\",\"keyserver.ubuntu.com\",\"ocsp.digicert.com\",\"ocsp.geotrust.com\",\"ocsp.globalsign.com\",\"ocsp.identrust.com\",\"ocsp.sectigo.com\",\"ocsp.ssl.com\",\"ocsp.thawte.com\",\"ocsp.usertrust.com\",\"ocsp.verisign.com\",\"s.symcb.com\",\"s.symcd.com\",\"security.ubuntu.com\",\"ts-crl.ws.symantec.com\",\"ts-ocsp.ws.symantec.com\"],\"isolation\":true,\"topologyAttach\":[\"awmg-mcpg\"]},\"apiProxy\":{\"enabled\":true,\"enableTokenSteering\":true,\"maxRuns\":500,\"maxCacheMisses\":5,\"maxAiCredits\":${GH_AW_MAX_AI_CREDITS},\"models\":{\"agent\":[\"sonnet-6x\",\"gpt-6\",\"gpt-5.4\",\"gpt-5.5\",\"gpt-5.6\",\"gpt-5.3\",\"gemini-pro\",\"any\"],\"antigravity\":[\"copilot/antigravity*\",\"google/antigravity*\",\"gemini/antigravity*\"],\"any\":[\"copilot/*\",\"anthropic/*\",\"openai/*\",\"google/*\",\"gemini/*\"],\"auto\":[\"copilot/auto\",\"large\"],\"claude\":[\"agent\"],\"codex\":[\"agent\"],\"coding\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\",\"gpt-5-codex\",\"kimi\"],\"computer-use\":[\"copilot/*computer-use*\",\"google/*computer-use*\",\"gemini/*computer-use*\",\"openai/*computer-use*\"],\"copilot\":[\"agent\"],\"deep-research\":[\"copilot/deep-research*\",\"copilot/o3-deep-research*\",\"copilot/o4-mini-deep-research*\",\"google/deep-research*\",\"gemini/deep-research*\",\"openai/o3-deep-research*\",\"openai/o4-mini-deep-research*\"],\"detection\":[\"small\",\"copilot/gpt-*-luna\",\"openai/gpt-*-luna\",\"small-agent\",\"agent\"],\"evals\":[\"copilot/gpt-6-luna-decisions\"],\"fable\":[\"copilot/*fable*\",\"anthropic/*fable*\"],\"gemini\":[\"agent\"],\"gemini-3-flash\":[\"copilot/gemini-3*flash*\",\"google/gemini-3*flash*\",\"gemini/gemini-3*flash*\"],\"gemini-3-pro\":[\"copilot/gemini-3*pro*\",\"google/gemini-3*pro*\",\"google/nano-banana*\",\"gemini/gemini-3*pro*\"],\"gemini-3.1-flash\":[\"copilot/gemini-3.1*flash*\",\"google/gemini-3.1*flash*\",\"gemini/gemini-3.1*flash*\"],\"gemini-3.1-pro\":[\"copilot/gemini-3.1*pro*\",\"google/gemini-3.1*pro*\",\"gemini/gemini-3.1*pro*\"],\"gemini-3.5-flash\":[\"copilot/gemini-3.5*flash*\",\"google/gemini-3.5*flash*\",\"gemini/gemini-3.5*flash*\"],\"gemini-3.6-flash\":[\"copilot/gemini-3.6*flash*\",\"google/gemini-3.6*flash*\",\"gemini/gemini-3.6*flash*\"],\"gemini-3.7-flash\":[\"copilot/gemini-3.7*flash*\",\"google/gemini-3.7*flash*\",\"gemini/gemini-3.7*flash*\"],\"gemini-3.8-flash\":[\"copilot/gemini-3.8*flash*\",\"google/gemini-3.8*flash*\",\"gemini/gemini-3.8*flash*\"],\"gemini-flash\":[\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"],\"gemini-flash-lite\":[\"copilot/gemini-*flash*lite*\",\"google/gemini-*flash*lite*\",\"gemini/gemini-*flash*lite*\"],\"gemini-omni\":[\"copilot/gemini-omni*\",\"google/gemini-omni*\",\"gemini/gemini-omni*\"],\"gemini-pro\":[\"copilot/gemini-*pro*\",\"google/gemini-*pro*\",\"gemini/gemini-*pro*\"],\"gemma\":[\"copilot/gemma*\",\"google/gemma*\",\"gemini/gemma*\"],\"gpt-5\":[\"copilot/gpt-5*\",\"openai/gpt-5*\"],\"gpt-5-codex\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\"],\"gpt-5-mini\":[\"copilot/gpt-5*mini*\",\"openai/gpt-5*mini*\"],\"gpt-5-nano\":[\"copilot/gpt-5*nano*\",\"openai/gpt-5*nano*\"],\"gpt-5-pro\":[\"copilot/gpt-5*pro*\",\"openai/gpt-5*pro*\"],\"gpt-5.1\":[\"copilot/gpt-5.1*\",\"openai/gpt-5.1*\"],\"gpt-5.2\":[\"copilot/gpt-5.2*\",\"openai/gpt-5.2*\"],\"gpt-5.3\":[\"copilot/gpt-5.3*\",\"openai/gpt-5.3*\"],\"gpt-5.4\":[\"copilot/gpt-5.4*\",\"openai/gpt-5.4*\"],\"gpt-5.5\":[\"copilot/gpt-5.5*\",\"openai/gpt-5.5*\"],\"gpt-5.6\":[\"copilot/gpt-5.6*\",\"openai/gpt-5.6*\"],\"gpt-6\":[\"copilot/gpt-6*\",\"openai/gpt-6*\"],\"grok\":[\"copilot/*grok*\",\"openai/*grok*\"],\"haiku\":[\"copilot/*haiku*\",\"anthropic/*haiku*\"],\"image-generation\":[\"copilot/gpt-image*\",\"openai/gpt-image*\",\"openai/chatgpt-image*\",\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"google/imagen*\"],\"kimi\":[\"copilot/kimi*\",\"openai/kimi*\"],\"kiwi\":[\"copilot/kiwi*\",\"openai/kiwi*\"],\"large\":[\"sonnet\",\"gpt-6\",\"gpt-5-pro\",\"gpt-5\",\"gemini-pro\"],\"lyria\":[\"google/lyria*\",\"gemini/lyria*\",\"copilot/lyria*\"],\"mai-code\":[\"copilot/MAI-Code*\",\"copilot/mai-code*\",\"openai/MAI-Code*\"],\"mini\":[\"haiku\",\"gpt-5-mini\",\"gpt-5-nano\",\"gemini-flash-lite\"],\"nano-banana\":[\"copilot/nano-banana*\",\"google/nano-banana*\",\"gemini/nano-banana*\"],\"opus\":[\"copilot/*opus*\",\"anthropic/*opus*\"],\"opusplan\":[\"opus?effort=high\"],\"raptor-mini\":[\"copilot/raptor*\",\"openai/raptor*\"],\"reasoning\":[\"copilot/o1*\",\"copilot/o3*\",\"copilot/o4*\",\"openai/o1*\",\"openai/o3*\",\"openai/o4*\"],\"robotics\":[\"copilot/*robotics*\",\"google/*robotics*\",\"gemini/*robotics*\"],\"small\":[\"mini\"],\"small-agent\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash\"],\"sonnet\":[\"copilot/*sonnet*\",\"anthropic/*sonnet*\"],\"sonnet-6x\":[\"copilot/*sonnet-4.5*\",\"copilot/*sonnet-4.6*\",\"copilot/*sonnet-5*\",\"copilot/*sonnet-4-5-*\",\"anthropic/*sonnet-4-5-*\",\"copilot/*sonnet-4-6*\",\"anthropic/*sonnet-4-6*\",\"anthropic/*sonnet-5*\"],\"summarization\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash-lite\",\"mini\"],\"veo\":[\"google/veo*\",\"gemini/veo*\"],\"vision\":[\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"]}},\"container\":{\"imageTag\":\"0.29.11,squid=sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847,agent=sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e,agent-act=sha256:ab786b54e96f95204366fdf195f80758e14891ebb17afe9e2ddc8d98555ebb46,api-proxy=sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c,cli-proxy=sha256:97782bc0d8ff7f80f19ae2fdc5e1668517aa732a6fa077e64b8d3919238496d2\",\"agentTimeout\":90},\"logging\":{\"proxyLogsDir\":\"/tmp/gh-aw/sandbox/firewall/logs\",\"auditDir\":\"/tmp/gh-aw/sandbox/firewall/audit\"}}" > "${RUNNER_TEMP}/gh-aw/awf-config.json"
           cp "${RUNNER_TEMP}/gh-aw/awf-config.json" /tmp/gh-aw/awf-config.json
           export GH_AW_MODELS_JSON_PATH="/tmp/gh-aw/models.json"
           GH_AW_DOCKER_HOST=""
@@ -1606,8 +1500,8 @@ jobs:
           GH_AW_AWF_LOG_FILE=/tmp/gh-aw/agent-stdio.log \
           GH_AW_AWF_ATTEMPT_LOG_NAME=copilot \
           bash "${RUNNER_TEMP}/gh-aw/actions/run_awf_with_startup_retries.sh" -- \
-            awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST:+--docker-host "$GH_AW_DOCKER_HOST"} --env-all --exclude-env ACTIONS_ID_TOKEN_REQUEST_TOKEN --exclude-env ACTIONS_ID_TOKEN_REQUEST_URL --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GH_AW_OTLP_ALL_HEADERS --exclude-env GH_AW_OTLP_ENDPOINTS --exclude-env GITHUB_MCP_SERVER_TOKEN --exclude-env MCP_GATEWAY_AGENT_ID --exclude-env OTEL_EXPORTER_OTLP_ENDPOINT --exclude-env OTEL_EXPORTER_OTLP_HEADERS --mount /tmp/gh-aw:/tmp/gh-aw:rw --log-level info --session-state-dir /tmp/gh-aw/sandbox/agent/session-state --skip-pull \
-            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && : "${RUNNER_TOOL_CACHE:?RUNNER_TOOL_CACHE must be set}"; GH_AW_TOOL_CACHE="$RUNNER_TOOL_CACHE"; GH_AW_TOOL_BINS="$(find "$GH_AW_TOOL_CACHE" -maxdepth 5 -type d -name bin 2>/dev/null | tr "\n" ":")"; GH_AW_TOOL_BINS="${GH_AW_TOOL_BINS%:}"; export PATH="$PATH${GH_AW_TOOL_BINS:+:}$GH_AW_TOOL_BINS"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true; [ -n "$ERLANG_HOME" ] && export PATH="$ERLANG_HOME/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" "${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs" "${RUNNER_TEMP}/gh-aw/bin/copilot" --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-tool github --allow-tool mcpscripts --allow-tool safeoutputs --allow-tool '\''shell(cat)'\'' --allow-tool '\''shell(date)'\'' --allow-tool '\''shell(diff)'\'' --allow-tool '\''shell(echo)'\'' --allow-tool '\''shell(github:*)'\'' --allow-tool '\''shell(grep)'\'' --allow-tool '\''shell(head)'\'' --allow-tool '\''shell(jq)'\'' --allow-tool '\''shell(kyverno-latest:*)'\'' --allow-tool '\''shell(kyverno-previous:*)'\'' --allow-tool '\''shell(ls)'\'' --allow-tool '\''shell(mcpscripts:*)'\'' --allow-tool '\''shell(mkdir)'\'' --allow-tool '\''shell(printf)'\'' --allow-tool '\''shell(pwd)'\'' --allow-tool '\''shell(safeoutputs:*)'\'' --allow-tool '\''shell(sort)'\'' --allow-tool '\''shell(tail)'\'' --allow-tool '\''shell(uniq)'\'' --allow-tool '\''shell(wc)'\'' --allow-tool '\''shell(yq)'\'' --allow-tool write --deny-tool workflow --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt'
+            awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST:+--docker-host "$GH_AW_DOCKER_HOST"} --env-all --exclude-env ACTIONS_ID_TOKEN_REQUEST_TOKEN --exclude-env ACTIONS_ID_TOKEN_REQUEST_URL --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GH_AW_OTLP_ALL_HEADERS --exclude-env GH_AW_OTLP_ENDPOINTS --exclude-env MCP_GATEWAY_AGENT_ID --exclude-env OTEL_EXPORTER_OTLP_ENDPOINT --exclude-env OTEL_EXPORTER_OTLP_HEADERS --mount /tmp/gh-aw:/tmp/gh-aw:rw --log-level info --session-state-dir /tmp/gh-aw/sandbox/agent/session-state --skip-pull \
+            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && : "${RUNNER_TOOL_CACHE:?RUNNER_TOOL_CACHE must be set}"; GH_AW_TOOL_CACHE="$RUNNER_TOOL_CACHE"; GH_AW_TOOL_BINS="$(find "$GH_AW_TOOL_CACHE" -maxdepth 5 -type d -name bin 2>/dev/null | tr "\n" ":")"; GH_AW_TOOL_BINS="${GH_AW_TOOL_BINS%:}"; export PATH="$PATH${GH_AW_TOOL_BINS:+:}$GH_AW_TOOL_BINS"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true; [ -n "$ERLANG_HOME" ] && export PATH="$ERLANG_HOME/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" "${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs" "${RUNNER_TEMP}/gh-aw/bin/copilot" --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-tool mcpscripts --allow-tool safeoutputs --allow-tool '\''shell(cat)'\'' --allow-tool '\''shell(date)'\'' --allow-tool '\''shell(diff)'\'' --allow-tool '\''shell(echo)'\'' --allow-tool '\''shell(grep)'\'' --allow-tool '\''shell(head)'\'' --allow-tool '\''shell(jq)'\'' --allow-tool '\''shell(kyverno-latest:*)'\'' --allow-tool '\''shell(kyverno-previous:*)'\'' --allow-tool '\''shell(kyverno-reported:*)'\'' --allow-tool '\''shell(ls)'\'' --allow-tool '\''shell(mcpscripts:*)'\'' --allow-tool '\''shell(mkdir)'\'' --allow-tool '\''shell(printf)'\'' --allow-tool '\''shell(pwd)'\'' --allow-tool '\''shell(safeoutputs:*)'\'' --allow-tool '\''shell(sort)'\'' --allow-tool '\''shell(tail)'\'' --allow-tool '\''shell(uniq)'\'' --allow-tool '\''shell(wc)'\'' --allow-tool '\''shell(yq)'\'' --allow-tool write --deny-tool workflow --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt'
         env:
           AWF_REFLECT_ENABLED: 1
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
@@ -1615,7 +1509,6 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           COPILOT_MODEL: ${{ inputs.model || 'claude-sonnet-5' }}
           GH_AW_LLM_PROVIDER: github
-          GH_AW_MAX_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_MAX_AI_CREDITS || '1000' }}
           GH_AW_MAX_TURNS: ${{ vars.GH_AW_DEFAULT_MAX_TURNS || '' }}
           GH_AW_MODEL_FALLBACK: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || vars.GH_AW_DEFAULT_MODEL_COPILOT || 'auto' }}
           GH_AW_PHASE: agent
@@ -1629,7 +1522,6 @@ jobs:
           GITHUB_COPILOT_INTEGRATION_ID: agentic-workflows
           GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS: false
           GITHUB_HEAD_REF: ${{ github.head_ref }}
-          GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_STEP_SUMMARY: /tmp/gh-aw/agent-step-summary.md
@@ -1641,19 +1533,6 @@ jobs:
           RUNNER_TEMP: ${{ runner.temp }}
           S2STOKENS: true
           TRACEPARENT: ${{ env.GITHUB_AW_OTEL_TRACE_ID != '' && env.GITHUB_AW_OTEL_PARENT_SPAN_ID != '' && format('00-{0}-{1}-01', env.GITHUB_AW_OTEL_TRACE_ID, env.GITHUB_AW_OTEL_PARENT_SPAN_ID) || '' }}
-      - name: Log GitHub rate limits at agent end
-        if: always()
-        continue-on-error: true
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
-          script: |
-            const path = require('path');
-            const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');
-            const { setupGlobals } = require(path.join(actionsDir, 'setup_globals.cjs'));
-            setupGlobals(core, github, context, exec, io, getOctokit);
-            const { fetchAndLogRateLimit } = require(path.join(actionsDir, 'github_rate_limit_logger.cjs'));
-            await fetchAndLogRateLimit(github, 'agent_end', true);
       - name: Detect agent errors
         if: always()
         id: detect-agent-errors
@@ -1929,12 +1808,12 @@ jobs:
 
   collect:
     name: collect
+    needs: activation
     runs-on: ubuntu-latest
     # Permissions for the collect job (workflow permissions default to none).
     permissions: {}
     outputs:
       count: "${{ steps.collect.outputs.count }}"
-      json: "${{ steps.collect.outputs.json }}"
     steps:
       - name: Configure GH_HOST for enterprise compatibility
         id: ghes-host-config
@@ -1968,11 +1847,78 @@ jobs:
       - id: collect
         run: |
           python3 - <<'PY'
-          import hashlib, json, os, re, subprocess
+          import hashlib, json, os, re, subprocess, urllib.request
           import yaml
 
           MARKER = re.compile(r"<!-- security-triage:v1 fingerprint=([0-9a-f]{16}) classification=([a-z-]+) -->")
-          MAX_DESCRIPTION, MAX_COMMENT, MAX_COMMENTS = 12000, 3000, 10
+          # Generous: the agent reads these from a file, and long reports keep their steps near the end.
+          MAX_DESCRIPTION, MAX_COMMENT, MAX_COMMENTS = 60000, 10000, 10
+          # The agent's input is a file, not a job output: GitHub drops a job output that happens to contain the text
+          # of any masked secret, and report text can contain anything.
+          ADVISORIES_DIR = "/tmp/security-triage-advisories"
+          RELEASE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+          CONSTRAINT = re.compile(r"^(<=|>=|<|>|==|=)?\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?$")
+
+          def reported_release(vulnerabilities, releases, package=""):
+              """The release to test first: the newest published release inside the advisory's version ranges, e.g.
+              `<= 1.18.1` gives v1.18.1 and `< 1.19.1` the newest release below it. Only the ranges for `package`
+              count (an advisory can list other affected products), and an entry with no package. None if no range
+              can be read."""
+              def ver(m):
+                  return tuple(int(g or 0) for g in m.groups()[-3:])
+              found = []
+              for vuln in vulnerabilities or []:
+                  name = str(((vuln or {}).get("package") or {}).get("name") or "").lower()
+                  if package and name and name != package.lower():
+                      continue
+                  text = str((vuln or {}).get("vulnerable_version_range") or "").replace("\\", "").replace("`", "")
+                  parts = [p.strip() for p in text.split(",") if p.strip()]
+                  constraints = []
+                  for part in parts:
+                      m = CONSTRAINT.match(part)
+                      if not m:
+                          constraints = None
+                          break
+                      constraints.append((m.group(1) or "=", ver(m)))
+                  if not constraints:
+                      continue
+                  tests = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b, ">=": lambda a, b: a >= b,
+                           ">": lambda a, b: a > b, "=": lambda a, b: a == b, "==": lambda a, b: a == b}
+                  for tag in releases:
+                      m = RELEASE.match(tag)
+                      if m and all(tests[op](ver(m), bound) for op, bound in constraints):
+                          found.append((ver(m), tag))
+              return max(found)[1] if found else None
+
+          def releases_of(repo):
+              """Published, non-prerelease release tags of the project. Stops the run if they cannot be read: without
+              them every reported release would be empty and the agent would fall back to guessing one, so it is better
+              to triage nothing and let the next run try again."""
+              r = subprocess.run(["gh", "api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"],
+                                 capture_output=True, text=True, env=dict(os.environ, GH_TOKEN=os.environ["RELEASES_TOKEN"]))
+              if r.returncode == 0:
+                  pages = json.loads(r.stdout or "[]")
+              else:
+                  # The list is public; read it without a token if the run's token is refused.
+                  print(f"::warning::Listing the releases of {repo} with the run's token failed; trying without one")
+                  pages = public_pages(f"https://api.github.com/repos/{repo}/releases?per_page=100")
+                  if pages is None:
+                      raise SystemExit(f"::error::Could not list the releases of {repo}; nothing is triaged this run")
+              return [x["tag_name"] for page in pages for x in page if not x.get("draft") and not x.get("prerelease")]
+
+          def public_pages(url, limit=10):
+              """Pages of a public GitHub API list, without a token, following Link headers; None on any error."""
+              pages = []
+              try:
+                  while url and len(pages) < limit:
+                      with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"}),
+                                                  timeout=30) as resp:
+                          pages.append(json.load(resp))
+                          nxt = re.search(r'<([^>]+)>;\s*rel="next"', resp.headers.get("Link") or "")
+                          url = nxt.group(1) if nxt else None
+              except (OSError, ValueError):
+                  return None
+              return pages
           # The Kubernetes manifests in a report are copied into files, exactly as written, so the agent applies them
           # by path instead of retyping them. The text is untrusted: the files are only written, never run, their
           # names come from this script, and their number and size (in bytes, as lab-kubectl checks it) are capped.
@@ -2132,12 +2078,12 @@ jobs:
                       return c, m.group(1), m.group(2)
               return None, None, None
 
-          def pick(advisories, comments_for, limit, only=""):
-              """Advisories to triage and the index for the posting job. `only` triages that one even if unchanged."""
-              todo, index = [], {}
+          def pick(advisories, comments_for, limit, only="", releases=(), package=""):
+              """Advisories to triage and the index for the posting job. `only` triages that one even if unchanged.
+              New and changed reports go first, oldest first; an advisory left unfinished by an earlier run is retried
+              only when a slot is free, so one that keeps failing cannot hold the queue."""
+              candidates = []
               for adv in sorted(advisories, key=lambda a: a.get("created_at") or ""):
-                  if len(todo) >= limit:
-                      break
                   g = adv["ghsa_id"]
                   if only and g != only:
                       continue
@@ -2151,21 +2097,25 @@ jobs:
                   if old_fp == fp and not only:
                       continue
                   humans = [c for c in comments if (c.get("user") or {}).get("type") != "Bot"][-MAX_COMMENTS:]
-                  todo.append({
+                  entry = {
                       "ghsa_id": g, "state": adv.get("state"), "summary": adv.get("summary"),
                       "description": (adv.get("description") or "")[:MAX_DESCRIPTION],
                       "reporter": reporter, "reported_severity": adv.get("severity"),
                       "reported_cvss_vector": cvss_vector(adv), "cwe_ids": adv.get("cwe_ids"),
                       "vulnerabilities": adv.get("vulnerabilities"), "created_at": adv.get("created_at"),
+                      "reported_release": reported_release(adv.get("vulnerabilities"), releases, package),
                       "previous_bot_result": old_cls,
                       "comments": [{"author": (c.get("user") or {}).get("login"),
                                     "is_reporter": (c.get("user") or {}).get("login") == reporter,
                                     "body": (c.get("body") or "")[:MAX_COMMENT]} for c in humans],
-                  })
-                  index[g] = {"fingerprint": fp, "previous_classification": old_cls,
-                              "comment_id": mine["id"] if mine else None,
-                              "severity": adv.get("severity"), "cvss_vector": cvss_vector(adv)}
-              return todo, index
+                  }
+                  row = {"fingerprint": fp, "previous_classification": old_cls,
+                         "comment_id": mine["id"] if mine else None,
+                         "severity": adv.get("severity"), "cvss_vector": cvss_vector(adv)}
+                  candidates.append((old_cls == "unfinished", entry, row))
+              # Stable sort: retries after the rest, each group still oldest first.
+              chosen = sorted(candidates, key=lambda c: c[0])[:limit]
+              return [e for _, e, _ in chosen], {e["ghsa_id"]: r for _, e, r in chosen}
 
           def main():
               target, limit = os.environ["TARGET_REPO"], int(os.environ["LIMIT"])
@@ -2180,28 +2130,33 @@ jobs:
                   if g not in cache:
                       cache[g] = gh_list(f"repos/{target}/security-advisories/{g}/comments?per_page=100")
                   return cache[g]
-              todo, index = pick(advisories, comments_for, limit, only)
+              repo = os.environ["CLI_REPO"]
+              todo, index = pick(advisories, comments_for, limit, only, releases_of(repo), f"github.com/{repo}")
               write_manifests(todo, advisories, comments_for)
               # Counts only: the log of a public repository must not carry report text or which reports exist.
               print(f"{sum(len(t['manifests']) for t in todo)} manifest files from the reports to triage")
               published = [{"ghsa_id": a["ghsa_id"], "cve_id": a.get("cve_id"), "summary": a.get("summary"),
                             "severity": a.get("severity"), "cwe_ids": a.get("cwe_ids")}
-                           for a in (gh_list(f"repos/{target}/security-advisories?state=published&per_page=100") or [])][:60]
+                           for a in (gh_list(f"repos/{target}/security-advisories?state=published&per_page=100") or [])]
               print(f"{len(advisories)} unpublished advisories, {len(todo)} to triage")
               os.makedirs("/tmp/security-triage-index", exist_ok=True)
               with open("/tmp/security-triage-index/index.json", "w") as f:
                   json.dump(index, f)
+              os.makedirs(ADVISORIES_DIR, exist_ok=True)
+              with open(os.path.join(ADVISORIES_DIR, "advisories.json"), "w") as f:
+                  json.dump({"advisories": todo, "published": published}, f)
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                  f.write("json=" + json.dumps({"advisories": todo, "published": published}, separators=(",", ":")) + "\n")
                   f.write(f"count={len(todo)}\n")
 
           if os.environ.get("SECURITY_TRIAGE_NO_MAIN") != "1":
               main()
           PY
         env:
+          CLI_REPO: kyverno/kyverno
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          LIMIT: "5"
+          LIMIT: "1"
           ONLY_GHSA: ${{ inputs.ghsa_id }}
+          RELEASES_TOKEN: ${{ github.token }}
           STATES: "[\"triage\",\"draft\"]"
           TARGET_REPO: suhaani-agarwal/security-triage-sandbox
       - name: Keep the index for the posting job
@@ -2210,6 +2165,13 @@ jobs:
           if-no-files-found: error
           name: security-triage-index
           path: /tmp/security-triage-index/index.json
+          retention-days: ${{ vars.GH_AW_DEFAULT_ARTIFACT_RETENTION_DAYS || '1.0' }}
+      - name: Keep the advisories for the agent
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: error
+          name: security-triage-advisories
+          path: /tmp/security-triage-advisories/advisories.json
           retention-days: ${{ vars.GH_AW_DEFAULT_ARTIFACT_RETENTION_DAYS || '1.0' }}
       - name: Keep the report manifests for the agent
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -2424,7 +2386,7 @@ jobs:
           GH_AW_AIC: ${{ needs.agent.outputs.aic }}
           GH_AW_THREAT_DETECTION_AIC: ${{ needs.detection.outputs.aic }}
           GH_AW_DETECTION_JOB_RESULT: ${{ needs.detection.result }}
-          GH_AW_MAX_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_MAX_AI_CREDITS || '1000' }}
+          GH_AW_MAX_AI_CREDITS: "200"
           GH_AW_DEFAULT_CHECKOUT_USES_TRIGGER_REF: "true"
           GH_AW_INFERENCE_ACCESS_ERROR: ${{ needs.agent.outputs.inference_access_error }}
           GH_AW_MCP_POLICY_ERROR: ${{ needs.agent.outputs.mcp_policy_error }}
@@ -2753,7 +2715,6 @@ jobs:
           COPILOT_MODEL: detection
           GH_AW_HARNESS_MAX_RETRIES: 0
           GH_AW_LLM_PROVIDER: github
-          GH_AW_MAX_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_DETECTION_MAX_AI_CREDITS || '400' }}
           GH_AW_MAX_TURNS: ${{ vars.GH_AW_DEFAULT_MAX_TURNS || '' }}
           GH_AW_PHASE: detection
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
@@ -2802,9 +2763,9 @@ jobs:
           chmod 755 "$GH_AW_COPILOT_BIN"
 
           (umask 177 && touch /tmp/gh-aw/threat-detection/detection.log)
-          GH_AW_MAX_AI_CREDITS="${GH_AW_MAX_AI_CREDITS:-400}"
+          GH_AW_MAX_AI_CREDITS="10"
           if [[ ! "$GH_AW_MAX_AI_CREDITS" =~ ^[0-9]+$ ]]; then
-            GH_AW_MAX_AI_CREDITS="400"
+            GH_AW_MAX_AI_CREDITS="10"
           fi
 
           if [[ "${GH_AW_ADMISSION_RESULT:-}" == "admitted" && -n "${GH_AW_ADMISSION_MAX_AI_CREDITS:-}" ]]; then
@@ -2818,7 +2779,7 @@ jobs:
             echo "No component admission allowance; retaining existing budget policy (value withheld)."
           fi
           unset GH_AW_ADMISSION_RESULT GH_AW_ADMISSION_MAX_AI_CREDITS
-          printf '%s\n' "{\"\$schema\":\"https://github.com/github/gh-aw-firewall/releases/download/v0.29.11/awf-config.schema.json\",\"apiProxy\":{\"enabled\":true,\"enableTokenSteering\":true,\"maxRuns\":500,\"maxAiCredits\":${GH_AW_MAX_AI_CREDITS},\"maxCacheMisses\":5,\"models\":{\"agent\":[\"sonnet-6x\",\"gpt-6\",\"gpt-5.4\",\"gpt-5.5\",\"gpt-5.6\",\"gpt-5.3\",\"gemini-pro\",\"any\"],\"antigravity\":[\"copilot/antigravity*\",\"google/antigravity*\",\"gemini/antigravity*\"],\"any\":[\"copilot/*\",\"anthropic/*\",\"openai/*\",\"google/*\",\"gemini/*\"],\"auto\":[\"copilot/auto\",\"large\"],\"claude\":[\"agent\"],\"codex\":[\"agent\"],\"coding\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\",\"gpt-5-codex\",\"kimi\"],\"computer-use\":[\"copilot/*computer-use*\",\"google/*computer-use*\",\"gemini/*computer-use*\",\"openai/*computer-use*\"],\"copilot\":[\"agent\"],\"deep-research\":[\"copilot/deep-research*\",\"copilot/o3-deep-research*\",\"copilot/o4-mini-deep-research*\",\"google/deep-research*\",\"gemini/deep-research*\",\"openai/o3-deep-research*\",\"openai/o4-mini-deep-research*\"],\"detection\":[\"small\",\"copilot/gpt-*-luna\",\"openai/gpt-*-luna\",\"small-agent\",\"agent\"],\"evals\":[\"copilot/gpt-6-luna-decisions\"],\"fable\":[\"copilot/*fable*\",\"anthropic/*fable*\"],\"gemini\":[\"agent\"],\"gemini-3-flash\":[\"copilot/gemini-3*flash*\",\"google/gemini-3*flash*\",\"gemini/gemini-3*flash*\"],\"gemini-3-pro\":[\"copilot/gemini-3*pro*\",\"google/gemini-3*pro*\",\"google/nano-banana*\",\"gemini/gemini-3*pro*\"],\"gemini-3.1-flash\":[\"copilot/gemini-3.1*flash*\",\"google/gemini-3.1*flash*\",\"gemini/gemini-3.1*flash*\"],\"gemini-3.1-pro\":[\"copilot/gemini-3.1*pro*\",\"google/gemini-3.1*pro*\",\"gemini/gemini-3.1*pro*\"],\"gemini-3.5-flash\":[\"copilot/gemini-3.5*flash*\",\"google/gemini-3.5*flash*\",\"gemini/gemini-3.5*flash*\"],\"gemini-3.6-flash\":[\"copilot/gemini-3.6*flash*\",\"google/gemini-3.6*flash*\",\"gemini/gemini-3.6*flash*\"],\"gemini-3.7-flash\":[\"copilot/gemini-3.7*flash*\",\"google/gemini-3.7*flash*\",\"gemini/gemini-3.7*flash*\"],\"gemini-3.8-flash\":[\"copilot/gemini-3.8*flash*\",\"google/gemini-3.8*flash*\",\"gemini/gemini-3.8*flash*\"],\"gemini-flash\":[\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"],\"gemini-flash-lite\":[\"copilot/gemini-*flash*lite*\",\"google/gemini-*flash*lite*\",\"gemini/gemini-*flash*lite*\"],\"gemini-omni\":[\"copilot/gemini-omni*\",\"google/gemini-omni*\",\"gemini/gemini-omni*\"],\"gemini-pro\":[\"copilot/gemini-*pro*\",\"google/gemini-*pro*\",\"gemini/gemini-*pro*\"],\"gemma\":[\"copilot/gemma*\",\"google/gemma*\",\"gemini/gemma*\"],\"gpt-5\":[\"copilot/gpt-5*\",\"openai/gpt-5*\"],\"gpt-5-codex\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\"],\"gpt-5-mini\":[\"copilot/gpt-5*mini*\",\"openai/gpt-5*mini*\"],\"gpt-5-nano\":[\"copilot/gpt-5*nano*\",\"openai/gpt-5*nano*\"],\"gpt-5-pro\":[\"copilot/gpt-5*pro*\",\"openai/gpt-5*pro*\"],\"gpt-5.1\":[\"copilot/gpt-5.1*\",\"openai/gpt-5.1*\"],\"gpt-5.2\":[\"copilot/gpt-5.2*\",\"openai/gpt-5.2*\"],\"gpt-5.3\":[\"copilot/gpt-5.3*\",\"openai/gpt-5.3*\"],\"gpt-5.4\":[\"copilot/gpt-5.4*\",\"openai/gpt-5.4*\"],\"gpt-5.5\":[\"copilot/gpt-5.5*\",\"openai/gpt-5.5*\"],\"gpt-5.6\":[\"copilot/gpt-5.6*\",\"openai/gpt-5.6*\"],\"gpt-6\":[\"copilot/gpt-6*\",\"openai/gpt-6*\"],\"grok\":[\"copilot/*grok*\",\"openai/*grok*\"],\"haiku\":[\"copilot/*haiku*\",\"anthropic/*haiku*\"],\"image-generation\":[\"copilot/gpt-image*\",\"openai/gpt-image*\",\"openai/chatgpt-image*\",\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"google/imagen*\"],\"kimi\":[\"copilot/kimi*\",\"openai/kimi*\"],\"kiwi\":[\"copilot/kiwi*\",\"openai/kiwi*\"],\"large\":[\"sonnet\",\"gpt-6\",\"gpt-5-pro\",\"gpt-5\",\"gemini-pro\"],\"lyria\":[\"google/lyria*\",\"gemini/lyria*\",\"copilot/lyria*\"],\"mai-code\":[\"copilot/MAI-Code*\",\"copilot/mai-code*\",\"openai/MAI-Code*\"],\"mini\":[\"haiku\",\"gpt-5-mini\",\"gpt-5-nano\",\"gemini-flash-lite\"],\"nano-banana\":[\"copilot/nano-banana*\",\"google/nano-banana*\",\"gemini/nano-banana*\"],\"opus\":[\"copilot/*opus*\",\"anthropic/*opus*\"],\"opusplan\":[\"opus?effort=high\"],\"raptor-mini\":[\"copilot/raptor*\",\"openai/raptor*\"],\"reasoning\":[\"copilot/o1*\",\"copilot/o3*\",\"copilot/o4*\",\"openai/o1*\",\"openai/o3*\",\"openai/o4*\"],\"robotics\":[\"copilot/*robotics*\",\"google/*robotics*\",\"gemini/*robotics*\"],\"small\":[\"mini\"],\"small-agent\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash\"],\"sonnet\":[\"copilot/*sonnet*\",\"anthropic/*sonnet*\"],\"sonnet-6x\":[\"copilot/*sonnet-4.5*\",\"copilot/*sonnet-4.6*\",\"copilot/*sonnet-5*\",\"copilot/*sonnet-4-5-*\",\"anthropic/*sonnet-4-5-*\",\"copilot/*sonnet-4-6*\",\"anthropic/*sonnet-4-6*\",\"anthropic/*sonnet-5*\"],\"summarization\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash-lite\",\"mini\"],\"veo\":[\"google/veo*\",\"gemini/veo*\"],\"vision\":[\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"]}},\"container\":{\"imageTag\":\"0.29.11,squid=sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847,agent=sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e,agent-act=sha256:ab786b54e96f95204366fdf195f80758e14891ebb17afe9e2ddc8d98555ebb46,api-proxy=sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c,cli-proxy=sha256:97782bc0d8ff7f80f19ae2fdc5e1668517aa732a6fa077e64b8d3919238496d2\",\"agentTimeout\":10},\"logging\":{\"proxyLogsDir\":\"/tmp/gh-aw/sandbox/firewall/logs\",\"auditDir\":\"/tmp/gh-aw/sandbox/firewall/audit\"}}" > "${RUNNER_TEMP}/gh-aw/awf-config.json"
+          printf '%s\n' "{\"\$schema\":\"https://github.com/github/gh-aw-firewall/releases/download/v0.29.11/awf-config.schema.json\",\"apiProxy\":{\"enabled\":true,\"enableTokenSteering\":true,\"maxRuns\":500,\"maxCacheMisses\":5,\"maxAiCredits\":${GH_AW_MAX_AI_CREDITS},\"models\":{\"agent\":[\"sonnet-6x\",\"gpt-6\",\"gpt-5.4\",\"gpt-5.5\",\"gpt-5.6\",\"gpt-5.3\",\"gemini-pro\",\"any\"],\"antigravity\":[\"copilot/antigravity*\",\"google/antigravity*\",\"gemini/antigravity*\"],\"any\":[\"copilot/*\",\"anthropic/*\",\"openai/*\",\"google/*\",\"gemini/*\"],\"auto\":[\"copilot/auto\",\"large\"],\"claude\":[\"agent\"],\"codex\":[\"agent\"],\"coding\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\",\"gpt-5-codex\",\"kimi\"],\"computer-use\":[\"copilot/*computer-use*\",\"google/*computer-use*\",\"gemini/*computer-use*\",\"openai/*computer-use*\"],\"copilot\":[\"agent\"],\"deep-research\":[\"copilot/deep-research*\",\"copilot/o3-deep-research*\",\"copilot/o4-mini-deep-research*\",\"google/deep-research*\",\"gemini/deep-research*\",\"openai/o3-deep-research*\",\"openai/o4-mini-deep-research*\"],\"detection\":[\"small\",\"copilot/gpt-*-luna\",\"openai/gpt-*-luna\",\"small-agent\",\"agent\"],\"evals\":[\"copilot/gpt-6-luna-decisions\"],\"fable\":[\"copilot/*fable*\",\"anthropic/*fable*\"],\"gemini\":[\"agent\"],\"gemini-3-flash\":[\"copilot/gemini-3*flash*\",\"google/gemini-3*flash*\",\"gemini/gemini-3*flash*\"],\"gemini-3-pro\":[\"copilot/gemini-3*pro*\",\"google/gemini-3*pro*\",\"google/nano-banana*\",\"gemini/gemini-3*pro*\"],\"gemini-3.1-flash\":[\"copilot/gemini-3.1*flash*\",\"google/gemini-3.1*flash*\",\"gemini/gemini-3.1*flash*\"],\"gemini-3.1-pro\":[\"copilot/gemini-3.1*pro*\",\"google/gemini-3.1*pro*\",\"gemini/gemini-3.1*pro*\"],\"gemini-3.5-flash\":[\"copilot/gemini-3.5*flash*\",\"google/gemini-3.5*flash*\",\"gemini/gemini-3.5*flash*\"],\"gemini-3.6-flash\":[\"copilot/gemini-3.6*flash*\",\"google/gemini-3.6*flash*\",\"gemini/gemini-3.6*flash*\"],\"gemini-3.7-flash\":[\"copilot/gemini-3.7*flash*\",\"google/gemini-3.7*flash*\",\"gemini/gemini-3.7*flash*\"],\"gemini-3.8-flash\":[\"copilot/gemini-3.8*flash*\",\"google/gemini-3.8*flash*\",\"gemini/gemini-3.8*flash*\"],\"gemini-flash\":[\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"],\"gemini-flash-lite\":[\"copilot/gemini-*flash*lite*\",\"google/gemini-*flash*lite*\",\"gemini/gemini-*flash*lite*\"],\"gemini-omni\":[\"copilot/gemini-omni*\",\"google/gemini-omni*\",\"gemini/gemini-omni*\"],\"gemini-pro\":[\"copilot/gemini-*pro*\",\"google/gemini-*pro*\",\"gemini/gemini-*pro*\"],\"gemma\":[\"copilot/gemma*\",\"google/gemma*\",\"gemini/gemma*\"],\"gpt-5\":[\"copilot/gpt-5*\",\"openai/gpt-5*\"],\"gpt-5-codex\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\"],\"gpt-5-mini\":[\"copilot/gpt-5*mini*\",\"openai/gpt-5*mini*\"],\"gpt-5-nano\":[\"copilot/gpt-5*nano*\",\"openai/gpt-5*nano*\"],\"gpt-5-pro\":[\"copilot/gpt-5*pro*\",\"openai/gpt-5*pro*\"],\"gpt-5.1\":[\"copilot/gpt-5.1*\",\"openai/gpt-5.1*\"],\"gpt-5.2\":[\"copilot/gpt-5.2*\",\"openai/gpt-5.2*\"],\"gpt-5.3\":[\"copilot/gpt-5.3*\",\"openai/gpt-5.3*\"],\"gpt-5.4\":[\"copilot/gpt-5.4*\",\"openai/gpt-5.4*\"],\"gpt-5.5\":[\"copilot/gpt-5.5*\",\"openai/gpt-5.5*\"],\"gpt-5.6\":[\"copilot/gpt-5.6*\",\"openai/gpt-5.6*\"],\"gpt-6\":[\"copilot/gpt-6*\",\"openai/gpt-6*\"],\"grok\":[\"copilot/*grok*\",\"openai/*grok*\"],\"haiku\":[\"copilot/*haiku*\",\"anthropic/*haiku*\"],\"image-generation\":[\"copilot/gpt-image*\",\"openai/gpt-image*\",\"openai/chatgpt-image*\",\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"google/imagen*\"],\"kimi\":[\"copilot/kimi*\",\"openai/kimi*\"],\"kiwi\":[\"copilot/kiwi*\",\"openai/kiwi*\"],\"large\":[\"sonnet\",\"gpt-6\",\"gpt-5-pro\",\"gpt-5\",\"gemini-pro\"],\"lyria\":[\"google/lyria*\",\"gemini/lyria*\",\"copilot/lyria*\"],\"mai-code\":[\"copilot/MAI-Code*\",\"copilot/mai-code*\",\"openai/MAI-Code*\"],\"mini\":[\"haiku\",\"gpt-5-mini\",\"gpt-5-nano\",\"gemini-flash-lite\"],\"nano-banana\":[\"copilot/nano-banana*\",\"google/nano-banana*\",\"gemini/nano-banana*\"],\"opus\":[\"copilot/*opus*\",\"anthropic/*opus*\"],\"opusplan\":[\"opus?effort=high\"],\"raptor-mini\":[\"copilot/raptor*\",\"openai/raptor*\"],\"reasoning\":[\"copilot/o1*\",\"copilot/o3*\",\"copilot/o4*\",\"openai/o1*\",\"openai/o3*\",\"openai/o4*\"],\"robotics\":[\"copilot/*robotics*\",\"google/*robotics*\",\"gemini/*robotics*\"],\"small\":[\"mini\"],\"small-agent\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash\"],\"sonnet\":[\"copilot/*sonnet*\",\"anthropic/*sonnet*\"],\"sonnet-6x\":[\"copilot/*sonnet-4.5*\",\"copilot/*sonnet-4.6*\",\"copilot/*sonnet-5*\",\"copilot/*sonnet-4-5-*\",\"anthropic/*sonnet-4-5-*\",\"copilot/*sonnet-4-6*\",\"anthropic/*sonnet-4-6*\",\"anthropic/*sonnet-5*\"],\"summarization\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash-lite\",\"mini\"],\"veo\":[\"google/veo*\",\"gemini/veo*\"],\"vision\":[\"copilot/gemini-*image*\",\"google/gemini-*image*\",\"gemini/gemini-*image*\",\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"]}},\"container\":{\"imageTag\":\"0.29.11,squid=sha256:861739ecf924dd2db5e5fb652db2ad82aaafd1615623297ddabc8f41a36b2847,agent=sha256:8774a73c351395b41d2ad0af4ddb4689007c67de3cd08bd9f43bb8a0e300690e,agent-act=sha256:ab786b54e96f95204366fdf195f80758e14891ebb17afe9e2ddc8d98555ebb46,api-proxy=sha256:88d2d0e315a504d93fd4fb8847fd0f6b7f4469f41a6fc6047b3dc9654c56ab2c,cli-proxy=sha256:97782bc0d8ff7f80f19ae2fdc5e1668517aa732a6fa077e64b8d3919238496d2\",\"agentTimeout\":10},\"logging\":{\"proxyLogsDir\":\"/tmp/gh-aw/sandbox/firewall/logs\",\"auditDir\":\"/tmp/gh-aw/sandbox/firewall/audit\"}}" > "${RUNNER_TEMP}/gh-aw/awf-config.json"
           cp "${RUNNER_TEMP}/gh-aw/awf-config.json" /tmp/gh-aw/awf-config.json
           export GH_AW_MODELS_JSON_PATH="/tmp/gh-aw/models.json"
           GH_AW_DOCKER_HOST=""
@@ -3039,6 +3000,7 @@ jobs:
               "not-reproduced": "Did not reproduce",
               "needs-more-info": "More information needed to reproduce",
               "possible-duplicate": "Possibly covered by a published advisory",
+              "not-tested": "Could not be tested here",
           }
           CVSS = re.compile(r"^CVSS:3\.1/AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH]$")
           # The same releases the lab installs, release candidates included.
@@ -3250,7 +3212,7 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           INDEX_FILE: /tmp/security-triage-index/index.json
           LAB_LOG: /tmp/security-triage-lab-log/commands.jsonl
-          LIMIT: "5"
+          LIMIT: "1"
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TARGET_REPO: suhaani-agarwal/security-triage-sandbox
 
@@ -3318,7 +3280,7 @@ jobs:
           # The posting job's marker format, which collect reads. No fingerprint matches sixteen zeros.
           MARKER = "<!-- security-triage:v1 fingerprint=0000000000000000 classification=unfinished -->"
           CLASSIFICATIONS = {"reproduced", "needs-non-default-config", "not-reproduced", "needs-more-info",
-                             "possible-duplicate"}
+                             "possible-duplicate", "not-tested"}
 
           def load(path, default):
               try:
@@ -3346,8 +3308,16 @@ jobs:
               if agent_output.get("collectorFailureCause") == "request_rejection":
                   return "The model's response was blocked by its provider's content filter."
               if env.get("AGENT_RESULT") not in ("success", None, ""):
-                  return "The agent job failed."
+                  # The AI-credit limit stops the agent this way too; the amount spent tells a maintainer which.
+                  spent = credits(env.get("AGENT_USAGE_FILE", ""))
+                  return "The agent job failed" + (f" after spending {spent:.0f} AI credits." if spent else ".")
               return "The agent stopped without recording a verdict for this advisory."
+
+          def credits(path):
+              try:
+                  return float(load(path, {}).get("ai_credits") or 0)
+              except (TypeError, ValueError):
+                  return 0
 
           def render(why, team, run_url):
               lines = [
@@ -3409,6 +3379,7 @@ jobs:
           AGENT_OUTPUT_FILE: /tmp/security-triage-agent/agent_output.json
           AGENT_RESULT: ${{ needs.agent.result }}
           AGENT_TIMED_OUT: ${{ needs.agent.outputs.agentic_engine_timeout }}
+          AGENT_USAGE_FILE: /tmp/security-triage-agent/agent_usage.json
           AW_INFO_FILE: /tmp/security-triage-activation/aw_info.json
           GH_TOKEN: ${{ steps.app.outputs.token }}
           INDEX_FILE: /tmp/security-triage-index/index.json
