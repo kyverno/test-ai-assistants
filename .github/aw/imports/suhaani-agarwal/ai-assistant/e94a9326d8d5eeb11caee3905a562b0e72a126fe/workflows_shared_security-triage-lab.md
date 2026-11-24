@@ -51,6 +51,9 @@ steps:
       NAME = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
       RULE_VERBS = {"get", "list", "watch", "create", "update", "patch", "delete", "deletecollection", "*"}
       RESOURCE = re.compile(r"^([a-z0-9*][a-z0-9-]*)(/[a-z]+)?(\.[a-z0-9][a-z0-9.-]*)?$")
+      DATA_KEY = re.compile(r"^[-._a-zA-Z0-9]{1,253}$")
+      # ConfigMap and Secret names are DNS subdomains: labels joined by dots, up to 253 characters.
+      SUBDOMAIN = re.compile(r"^(?=.{1,253}$)[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$")
       CLUSTER = "lab"
       MAX_OUT = 20000
       VERSION = re.compile(r"^v?\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?$")
@@ -274,14 +277,20 @@ steps:
               raise ValueError("give at least one rule")
           return rules
 
-      def tenant(namespace="", rules="", other_namespace="", user=""):
+      def tenant(namespace="", rules="", other_namespace="", user="", canary_name="", canary_key=""):
           """The usual setup for a report about a namespaced user: that user with only the given permissions in its
-          namespace, a second namespace holding canary values, and what the user can and cannot do."""
+          namespace, a canary value in another namespace, and what the user can and cannot do. The names default to
+          probe-*, and are set to the report's own when its manifests name them, so they apply unchanged."""
           ns, other, user = namespace or "probe-tenant", other_namespace or "probe-other", user or "probe-user"
+          name, key = canary_name or "probe-canary", canary_key or "value"
           try:
               for n in (ns, other, user):
                   if not NAME.match(n):
                       raise ValueError(f"{n!r} is not a valid Kubernetes name")
+              if not SUBDOMAIN.match(name):
+                  raise ValueError(f"{name!r} is not a valid ConfigMap or Secret name")
+              if not DATA_KEY.match(key):
+                  raise ValueError(f"{key!r} is not a valid data key")
               if len(user) > 55:
                   raise ValueError("user is limited to 55 characters, so its Role and RoleBinding names fit")
               if ns == other:
@@ -300,16 +309,31 @@ steps:
                "metadata": {"name": f"{user}-binding", "namespace": ns},
                "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": f"{user}-role"},
                "subjects": [{"kind": "ServiceAccount", "name": user, "namespace": ns}]},
-              {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "probe-canary", "namespace": other},
-               "data": {"value": canary}},
-              {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "probe-canary", "namespace": other},
-               "stringData": {"value": canary}},
           ]
           code, applied = run(["kubectl", "--request-timeout=90s", "apply", "-f", "-"],
                               stdin=json.dumps({"apiVersion": "v1", "kind": "List", "items": objects}), timeout=150)
-          log(f"lab-tenant namespace={ns} other_namespace={other} user={user} rules={rules.strip()}", code)
+          log(f"lab-tenant namespace={ns} other_namespace={other} user={user} canary={other}/{name}:{key} "
+              f"rules={rules.strip()}", code)
           if code:
               return out(code, applied)
+          # The canary objects are created, never applied: an object that already exists (kube-system/coredns, say) is
+          # left as it is, since writing the canary into it could break the lab, and its own value plays the canary's
+          # part. Create-only also covers an object that appears in the meantime. Any other error stops here.
+          canaries = {
+              "configmap": {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": name, "namespace": other},
+                            "data": {key: canary}},
+              "secret": {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": name, "namespace": other},
+                         "stringData": {key: canary}},
+          }
+          existing = []
+          for kind, obj in canaries.items():
+              c, created = run(["kubectl", "--request-timeout=90s", "create", "-f", "-"], stdin=json.dumps(obj), timeout=150)
+              if c == 0:
+                  applied += created
+              elif "AlreadyExists" in created:
+                  existing.append(kind)
+              else:
+                  return out(c, f"the user was created, but the canary {kind} {other}/{name} was not:\n{created}")
           as_user = f"system:serviceaccount:{ns}:{user}"
           checks = [(v, r, ns) for rule in parsed for v in rule["verbs"] if v != "*"
                     for r in [f"{n}.{rule['apiGroups'][0]}" if rule["apiGroups"][0] else n for n in rule["resources"]]][:20]
@@ -323,10 +347,15 @@ steps:
               if first not in ("yes", "no"):
                   return out(code or 1, f"the user was created, but `auth can-i {verb} {resource}` failed:\n{answer}")
               lines.append(f"  {first:4} {verb} {resource} " + (f"-n {where}" if where else "--all-namespaces"))
-          return out(0, f"act as this user with: --as={as_user}\n"
-                        f"canary value: {canary}, in ConfigMap {other}/probe-canary and Secret {other}/probe-canary "
-                        "(key `value`)\n"
-                        "what the user can do (kubectl auth can-i):\n" + "\n".join(lines) + "\n\n" + applied)
+          label = {"configmap": "ConfigMap", "secret": "Secret"}
+          planted = " and ".join(f"{label[k]} {other}/{name}" for k in label if k not in existing)
+          kept = " and ".join(f"{label[k]} {other}/{name}" for k in existing)
+          head = f"act as this user with: --as={as_user}\n"
+          if planted:
+              head += f"canary value: {canary}, under key `{key}` in {planted}\n"
+          if kept:
+              head += f"already existed and left unchanged, so its own value is the canary: {kept}\n"
+          return out(0, head + "what the user can do (kubectl auth can-i):\n" + "\n".join(lines) + "\n\n" + applied)
 
       def kubectl(args, stdin="", file=""):
           try:
@@ -359,7 +388,7 @@ steps:
               return install(env("INPUT_VERSION", ""), env("INPUT_VALUES", ""), env("INPUT_GHSA_ID", ""))
           if cmd == "tenant":
               return tenant(env("INPUT_NAMESPACE", ""), env("INPUT_RULES", ""), env("INPUT_OTHER_NAMESPACE", ""),
-                            env("INPUT_USER", ""))
+                            env("INPUT_USER", ""), env("INPUT_CANARY_NAME", ""), env("INPUT_CANARY_KEY", ""))
           if cmd == "kubectl":
               return kubectl(env("INPUT_ARGS", ""), env("INPUT_STDIN", ""), env("INPUT_FILE", ""))
           return out(2, f"unknown command {cmd!r}")
@@ -386,8 +415,8 @@ post-steps:
 mcp-scripts:
   lab-reset:
     description: >-
-      Delete the lab cluster and create a fresh, empty one (about a minute). Use it before switching releases and
-      between advisories, so nothing from one attempt carries into the next. Optionally pick the Kubernetes version.
+      Delete the lab cluster and create a fresh, empty one (about a minute), so nothing from one attempt carries into
+      the next. Optionally pick the Kubernetes version.
     inputs:
       k8s_version:
         type: string
@@ -420,9 +449,8 @@ mcp-scripts:
   lab-tenant:
     description: >-
       The usual setup for a report about a namespaced user, in one call: a service account with only the permissions
-      you give, in its own namespace, plus a second namespace holding a canary value in a ConfigMap and a Secret.
-      Returns the --as value, the canary value and `auth can-i` results showing what the user can and cannot do.
-      Run it again after each lab-reset.
+      you give, in its namespace, and a canary value in a ConfigMap and a Secret in another namespace. Returns the
+      --as value, the canary value and `auth can-i` results showing what the user can and cannot do.
     inputs:
       rules:
         type: string
@@ -433,23 +461,35 @@ mcp-scripts:
       namespace:
         type: string
         required: false
-        description: "The user's namespace. Default probe-tenant."
+        description: "The user's namespace: the one the report's manifests use, if they name one. Default probe-tenant."
       other_namespace:
         type: string
         required: false
-        description: "The namespace the user should not reach, which holds the canary. Default probe-other."
+        description: >-
+          The namespace the user should not reach, which holds the canary: the one the report's manifests read from,
+          if they name one. Default probe-other.
       user:
         type: string
         required: false
-        description: "The service account name. Default probe-user."
+        description: "The service account name: the report's, if it names one. Default probe-user."
+      canary_name:
+        type: string
+        required: false
+        description: >-
+          The name of the ConfigMap and Secret that hold the canary: the object the report's manifests read, if they
+          name one. Default probe-canary.
+      canary_key:
+        type: string
+        required: false
+        description: "The data key that holds the canary: the key the report's manifests read, if they name one. Default value."
     run: python3 -I "$RUNNER_TEMP/security-triage-lab/lab.py" tenant
     timeout: 180
   lab-kubectl:
     description: >-
       Run one kubectl command against the lab cluster, e.g. `apply -f -` with the manifest in stdin, `get pods -A`,
       `auth can-i get secrets -n other --as=system:serviceaccount:tenant:probe-user`, or `logs -n kyverno deploy/x`.
-      Impersonate users with --as. A manifest goes in stdin, or as `file` for one of the report's manifest files or
-      one in your scratch directory. Returns the exit code and output.
+      Act as a user with --as. A manifest goes in stdin, or as `file` for one of the report's manifest files or one
+      in your scratch directory. Returns the exit code and output.
     inputs:
       args:
         type: string
@@ -478,36 +518,27 @@ controller crashing. Use the CLI for what the CLI can show on its own.
 
 - `lab-reset` gives you a fresh empty cluster. It already ran once before you started, so the cluster exists, but
   nothing is installed in it yet.
-- `lab-install` installs a release with Helm, for the advisory you name in `ghsa_id`: a version such as `v1.16.1`, a minor such as `v1.16` for its newest
-  patch, or `latest`. Its output names the release it installed. Pass Helm values when the report needs a non-default
-  setting, and say in your verdict which ones you set and why.
-- `lab-tenant` sets up a namespaced user, a namespace it should not reach and a canary value there, in one call.
+- `lab-install` installs a release with Helm, for the advisory you name in `ghsa_id`: a release such as `v1.16.1`, a
+  minor such as `v1.16` for its newest patch, or `latest`. Its output names the release it installed. Pass Helm values
+  when the report needs a non-default setting, and say in your verdict which ones you set and why.
+- `lab-tenant` sets up a namespaced user and a canary value in a namespace it should not reach, in one call.
 - `lab-kubectl` runs one kubectl command. For a manifest from the report, use `-f -` with `file` set to its listed
   path, and do not retype it. The same works for a file you wrote in your scratch directory, so you can apply it
-  again on the next release without sending it twice. Otherwise put the manifest in `stdin` with `-f -`, and end
+  again on another release without sending it twice. Otherwise put the manifest in `stdin` with `-f -`, and end
   `stdin` with the line `# end`: if that line is missing, the input was cut off and nothing is applied, so send it
-  again in full. Act as a
-  restricted user with `--as=system:serviceaccount:<namespace>:<name>` after creating that service account and its
-  Role and RoleBinding.
+  again in full.
 
-How to use it:
+For each release the advisory steps ask you to test:
 
-1. Build only what the report needs. For a report about a namespaced user, call `lab-tenant` with exactly the
-   permissions the report says the user has: it creates the user, a namespace it should not reach and a canary value
-   there, so that "the value appeared" or "it changed" is something you can see, not something you infer. Read its
-   `auth can-i` results: if the user can already reach the other namespace, the report's claim proves nothing. Call it
-   again after each `lab-reset`, and add anything else the report needs with `lab-kubectl`.
-2. Install the version the report names, follow the report's steps for its main claim as that account, and record
-   what you observe: denials, the canary showing up where it should not, a resource changed, a controller
-   restarting (`get pods -n <namespace>` restart counts and `logs --previous`). Record the verdict so far.
-3. Then `lab-reset`, install the newest patch of the same minor release (for a report on v1.16.1, install `v1.16`),
-   and repeat the same claim with the same policy. Fixes usually ship as patches, so this shows whether the claim is
-   fixed, and the report's policy runs there unchanged.
-4. Only when the steps for advisories say to check the latest release: `lab-reset`, install `latest`, and repeat
-   the claim. If the latest release no longer accepts the report's policy, follow this project's rules for the
-   replacement.
-5. Do steps 3 and 4 before trying any further claim from the report. `lab-reset` before moving to the next
-   advisory.
+1. `lab-install` it. Then, for a report about a namespaced user, call `lab-tenant` with exactly the permissions the
+   report says the user has, and with the namespaces, user and object its manifests use, so they apply unchanged. The
+   canary makes "the value appeared" or "it changed" something you can see, not something you infer. Read its
+   `auth can-i` results: if the user can already reach the other namespace, the report's claim proves nothing. Add
+   anything else the report needs with `lab-kubectl`.
+2. Follow the report's steps as that user and record what you observe: denials, the canary showing up where it
+   should not, a resource changed, a controller restarting (`get pods -n <namespace>` restart counts and
+   `logs --previous`).
+3. `lab-reset` before the next release and before the next advisory.
 
 The lab records every command it runs, and the verdict comment lists them next to your evidence.
 
