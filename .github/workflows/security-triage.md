@@ -57,7 +57,7 @@ safe-outputs:
 timeout-minutes: 90
 
 imports:
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@e5b3c0fb2901bc3addda8e71bf98d8087177396a
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage.md@24e571a8c13edb78d5753e2dc54ce9a26238aed5
     with:
       # The repository whose advisories are triaged.
       target_repo: "suhaani-agarwal/security-triage-sandbox"
@@ -87,7 +87,7 @@ imports:
         release. The CEL libraries and migration documents in the context directory give the syntax: look a function
         up there before guessing its arguments.
   # A throwaway kind cluster in the run, for reports that need a running cluster. Drop this import for CLI only.
-  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@e5b3c0fb2901bc3addda8e71bf98d8087177396a
+  - uses: suhaani-agarwal/ai-assistant/workflows/shared/security-triage-lab.md@24e571a8c13edb78d5753e2dc54ce9a26238aed5
     with:
       helm_repo: "https://kyverno.github.io/kyverno/"
       chart_name: "kyverno"
